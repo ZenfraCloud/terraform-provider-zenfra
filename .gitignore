@@ -1,0 +1,45 @@
+# ABOUTME: Git ignore rules for the Zenfra Terraform provider repository.
+# ABOUTME: Excludes Go binaries, Terraform artifacts, IDE files, and OS metadata.
+
+# Go binaries
+terraform-provider-zenfra
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test and coverage
+*.test
+*.out
+coverage.html
+
+# Go vendor (use modules)
+vendor/
+
+# Terraform artifacts
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# GoReleaser
+dist/

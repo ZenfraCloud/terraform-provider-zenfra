@@ -1,0 +1,101 @@
+# ABOUTME: golangci-lint configuration for Zenfra Terraform Provider
+# ABOUTME: Enforces GOSTYLE.md principles: simplicity, least abstraction, idiomatic Go
+
+version: "2"
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+    - unconvert
+    - unparam
+    - misspell
+    - gocyclo
+    - gocognit
+    - gosec
+    - goconst
+    - gocritic
+    - errorlint
+
+  disable:
+    - funlen
+    - revive
+
+  settings:
+    gocyclo:
+      min-complexity: 15
+
+    funlen:
+      lines: 80
+      statements: 50
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    gocognit:
+      min-complexity: 20
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - ifElseChain
+        - singleCaseSwitch
+        - hugeParam
+
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+          disabled: true
+        - name: var-naming
+        - name: error-return
+        - name: error-naming
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-strings
+        - name: increment-decrement
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    gosec:
+      excludes:
+        - G104
+        - G404  # Allow math/rand for non-cryptographic jitter
+
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - funlen
+          - gocognit
+
+      - path: cmd/terraform-provider-zenfra/main\.go
+        linters:
+          - funlen
+          - gocognit
+          - revive
+
+      - path: cmd/
+        linters:
+          - gocritic
+        text: "context.Background"
