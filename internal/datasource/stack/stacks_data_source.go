@@ -18,8 +18,8 @@ type stacksDataSource struct {
 }
 
 type stacksDataSourceModel struct {
-	SpaceID types.String              `tfsdk:"space_id"`
-	Stacks  []stacksListItemModel     `tfsdk:"stacks"`
+	SpaceID types.String          `tfsdk:"space_id"`
+	Stacks  []stacksListItemModel `tfsdk:"stacks"`
 }
 
 type stacksListItemModel struct {

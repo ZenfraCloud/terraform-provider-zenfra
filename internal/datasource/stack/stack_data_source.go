@@ -18,19 +18,19 @@ type stackDataSource struct {
 }
 
 type stackDataSourceModel struct {
-	ID              types.String          `tfsdk:"id"`
-	Name            types.String          `tfsdk:"name"`
-	SpaceID         types.String          `tfsdk:"space_id"`
-	OrganizationID  types.String          `tfsdk:"organization_id"`
-	WorkerPoolID    types.String          `tfsdk:"worker_pool_id"`
-	AllowPublicPool types.Bool            `tfsdk:"allow_public_pool"`
-	IAC             *iacConfigModel       `tfsdk:"iac"`
-	Source          *stackSourceModel     `tfsdk:"source"`
-	Triggers        *stackTriggersModel   `tfsdk:"triggers"`
-	CreatedBy       types.String          `tfsdk:"created_by"`
-	CreatedAt       types.String          `tfsdk:"created_at"`
-	UpdatedAt       types.String          `tfsdk:"updated_at"`
-	UpdatedBy       types.String          `tfsdk:"updated_by"`
+	ID              types.String        `tfsdk:"id"`
+	Name            types.String        `tfsdk:"name"`
+	SpaceID         types.String        `tfsdk:"space_id"`
+	OrganizationID  types.String        `tfsdk:"organization_id"`
+	WorkerPoolID    types.String        `tfsdk:"worker_pool_id"`
+	AllowPublicPool types.Bool          `tfsdk:"allow_public_pool"`
+	IAC             *iacConfigModel     `tfsdk:"iac"`
+	Source          *stackSourceModel   `tfsdk:"source"`
+	Triggers        *stackTriggersModel `tfsdk:"triggers"`
+	CreatedBy       types.String        `tfsdk:"created_by"`
+	CreatedAt       types.String        `tfsdk:"created_at"`
+	UpdatedAt       types.String        `tfsdk:"updated_at"`
+	UpdatedBy       types.String        `tfsdk:"updated_by"`
 }
 
 type iacConfigModel struct {
@@ -39,16 +39,16 @@ type iacConfigModel struct {
 }
 
 type stackSourceModel struct {
-	Type   types.String           `tfsdk:"type"`
+	Type   types.String            `tfsdk:"type"`
 	RawGit *stackSourceRawGitModel `tfsdk:"raw_git"`
-	VCS    *stackSourceVCSModel   `tfsdk:"vcs"`
+	VCS    *stackSourceVCSModel    `tfsdk:"vcs"`
 }
 
 type stackSourceRawGitModel struct {
-	URL     types.String         `tfsdk:"url"`
-	RefType types.String         `tfsdk:"ref_type"`
-	RefName types.String         `tfsdk:"ref_name"`
-	Path    types.String         `tfsdk:"path"`
+	URL     types.String `tfsdk:"url"`
+	RefType types.String `tfsdk:"ref_type"`
+	RefName types.String `tfsdk:"ref_name"`
+	Path    types.String `tfsdk:"path"`
 }
 
 type stackSourceVCSModel struct {

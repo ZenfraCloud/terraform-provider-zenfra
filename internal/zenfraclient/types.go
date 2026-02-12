@@ -75,9 +75,9 @@ type StackSourceVCS struct {
 
 // StackSource is a discriminated union for stack code source.
 type StackSource struct {
-	Type   string              `json:"type"`
-	RawGit *StackSourceRawGit  `json:"raw_git,omitempty"`
-	VCS    *StackSourceVCS     `json:"vcs,omitempty"`
+	Type   string             `json:"type"`
+	RawGit *StackSourceRawGit `json:"raw_git,omitempty"`
+	VCS    *StackSourceVCS    `json:"vcs,omitempty"`
 }
 
 // StackTriggerOnPush configures push-based automation triggers.
@@ -167,18 +167,18 @@ type PoolCapacity struct {
 
 // WorkerPool represents a worker pool resource.
 type WorkerPool struct {
-	ID                 string       `json:"id"`
-	OrganizationID     string       `json:"organization_id"`
-	Name               string       `json:"name"`
-	PoolType           string       `json:"pool_type"`
-	APIKeyID           *string      `json:"api_key_id,omitempty"`
-	KeyVersion         int          `json:"key_version"`
-	Active             bool         `json:"active"`
-	ActiveWorkersCount int64        `json:"active_workers_count"`
+	ID                 string        `json:"id"`
+	OrganizationID     string        `json:"organization_id"`
+	Name               string        `json:"name"`
+	PoolType           string        `json:"pool_type"`
+	APIKeyID           *string       `json:"api_key_id,omitempty"`
+	KeyVersion         int           `json:"key_version"`
+	Active             bool          `json:"active"`
+	ActiveWorkersCount int64         `json:"active_workers_count"`
 	Capacity           *PoolCapacity `json:"capacity,omitempty"`
-	CreatedAt          time.Time    `json:"created_at"`
-	UpdatedAt          time.Time    `json:"updated_at"`
-	LastUsedAt         *time.Time   `json:"last_used_at,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+	LastUsedAt         *time.Time    `json:"last_used_at,omitempty"`
 }
 
 // CreateWorkerPoolRequest is the request body for creating a worker pool.
@@ -364,10 +364,10 @@ type VCSIntegration struct {
 
 // CreateVCSIntegrationRequest is the request body for creating a VCS integration.
 type CreateVCSIntegrationRequest struct {
-	Provider    string                    `json:"provider"`
-	DisplayName string                   `json:"display_name,omitempty"`
-	GitLab      *CreateVCSGitLabRequest  `json:"gitlab,omitempty"`
-	GitHub      *CreateVCSGitHubRequest  `json:"github,omitempty"`
+	Provider    string                  `json:"provider"`
+	DisplayName string                  `json:"display_name,omitempty"`
+	GitLab      *CreateVCSGitLabRequest `json:"gitlab,omitempty"`
+	GitHub      *CreateVCSGitHubRequest `json:"github,omitempty"`
 }
 
 // CreateVCSGitLabRequest contains GitLab-specific configuration.
