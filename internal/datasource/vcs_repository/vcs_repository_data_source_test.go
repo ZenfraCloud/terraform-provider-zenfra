@@ -36,7 +36,7 @@ func TestMapVCSRepositoryToDataSource(t *testing.T) {
 			expected: vcsRepositoryDataSourceModel{
 				ID:            types.StringValue("repo-abc"),
 				IntegrationID: types.StringValue("vcs-123"),
-				Provider:      types.StringValue("github"),
+				ProviderType:      types.StringValue("github"),
 				FullName:      types.StringValue("ndemeshchenko/tf-base"),
 				WebURL:        types.StringValue("https://github.com/ndemeshchenko/tf-base"),
 				DefaultBranch: types.StringValue("main"),
@@ -68,7 +68,7 @@ func TestMapVCSRepositoryToDataSource(t *testing.T) {
 			expected: vcsRepositoryDataSourceModel{
 				ID:            types.StringValue("repo-def"),
 				IntegrationID: types.StringValue("vcs-456"),
-				Provider:      types.StringValue("gitlab"),
+				ProviderType:      types.StringValue("gitlab"),
 				FullName:      types.StringValue("group/infra-modules"),
 				WebURL:        types.StringValue("https://gitlab.example.com/group/infra-modules"),
 				DefaultBranch: types.StringValue("develop"),
@@ -91,8 +91,8 @@ func TestMapVCSRepositoryToDataSource(t *testing.T) {
 			if !result.IntegrationID.Equal(tt.expected.IntegrationID) {
 				t.Errorf("IntegrationID: got %v, want %v", result.IntegrationID, tt.expected.IntegrationID)
 			}
-			if !result.Provider.Equal(tt.expected.Provider) {
-				t.Errorf("Provider: got %v, want %v", result.Provider, tt.expected.Provider)
+			if !result.ProviderType.Equal(tt.expected.ProviderType) {
+				t.Errorf("ProviderType: got %v, want %v", result.ProviderType, tt.expected.ProviderType)
 			}
 			if !result.FullName.Equal(tt.expected.FullName) {
 				t.Errorf("FullName: got %v, want %v", result.FullName, tt.expected.FullName)
