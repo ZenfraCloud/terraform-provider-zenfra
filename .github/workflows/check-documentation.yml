@@ -1,0 +1,83 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-documentation:
+    name: Check documentation is up to date
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1"
+          terraform_wrapper: false
+
+      - name: Build provider
+        run: go build -o terraform-provider-zenfra ./cmd/terraform-provider-zenfra
+
+      - name: Generate provider schema
+        run: |
+          TMPDIR=$(mktemp -d)
+          cat > "$TMPDIR/.terraformrc" <<'EOF'
+          provider_installation {
+            dev_overrides {
+              "registry.terraform.io/zenfra/zenfra" = "${{ github.workspace }}"
+            }
+            direct {}
+          }
+          EOF
+          cat > "$TMPDIR/main.tf" <<'EOF'
+          terraform {
+            required_providers {
+              zenfra = {
+                source = "registry.terraform.io/zenfra/zenfra"
+              }
+            }
+          }
+          provider "zenfra" {
+            api_token = "dummy"
+          }
+          EOF
+          TF_CLI_CONFIG_FILE="$TMPDIR/.terraformrc" terraform -chdir="$TMPDIR" providers schema -json > providers-schema.json
+          rm -rf "$TMPDIR"
+          python3 -c "
+          import json
+          with open('providers-schema.json') as f:
+              d = json.load(f)
+          s = d['provider_schemas']
+          key = list(s.keys())[0]
+          if key != 'zenfra':
+              s['zenfra'] = s.pop(key)
+              with open('providers-schema.json', 'w') as f:
+                  json.dump(d, f)
+          "
+
+      - name: Generate documentation
+        run: cd tools && go generate ./...
+
+      - name: Verify no changes
+        uses: tj-actions/verify-changed-files@v20
+        id: verify-changed-files
+        with:
+          files: docs
+
+      - name: Fail if docs are stale
+        if: steps.verify-changed-files.outputs.files_changed == 'true'
+        run: |
+          echo "docs/ is out of date. Run 'make docs' and commit the changes."
+          git diff
+          exit 1

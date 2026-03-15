@@ -320,13 +320,38 @@ type CreateTokenResponse struct {
 
 // --- Organization types ---
 
+// IACToolConfig represents the default IaC tool configuration.
+type IACToolConfig struct {
+	Engine  string `json:"engine"`
+	Version string `json:"version"`
+}
+
+// OrganizationSettings represents organization-level settings.
+type OrganizationSettings struct {
+	DefaultIACTool     IACToolConfig `json:"default_iac_tool"`
+	RunTimeoutMinutes  int           `json:"run_timeout_minutes"`
+	PlanTimeoutMinutes int           `json:"plan_timeout_minutes"`
+	AuditRetentionDays int           `json:"audit_retention_days"`
+}
+
+// OrganizationBilling represents billing information for an organization.
+type OrganizationBilling struct {
+	Plan            string `json:"plan"`
+	SlotLimit       int    `json:"slot_limit"`
+	SlotsUsed       int    `json:"slots_used"`
+	SlotsAvailable  int    `json:"slots_available"`
+	EnforcementMode string `json:"enforcement_mode"`
+}
+
 // Organization represents the current user's organization.
 type Organization struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        string               `json:"id"`
+	Name      string               `json:"name"`
+	Slug      string               `json:"slug"`
+	Settings  OrganizationSettings `json:"settings"`
+	Billing   *OrganizationBilling `json:"billing,omitempty"`
+	CreatedAt string               `json:"created_at"`
+	UpdatedAt string               `json:"updated_at,omitempty"`
 }
 
 // --- VCS Integration types ---

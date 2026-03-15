@@ -1,0 +1,1 @@
+terraform import zenfra_vcs_integration.github $VCS_INTEGRATION_ID

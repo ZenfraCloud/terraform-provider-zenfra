@@ -1,0 +1,1 @@
+terraform import zenfra_configuration_bundle.aws_credentials $BUNDLE_ID
