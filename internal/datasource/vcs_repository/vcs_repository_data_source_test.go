@@ -36,7 +36,7 @@ func TestMapVCSRepositoryToDataSource(t *testing.T) {
 			expected: vcsRepositoryDataSourceModel{
 				ID:            types.StringValue("repo-abc"),
 				IntegrationID: types.StringValue("vcs-123"),
-				ProviderType:      types.StringValue("github"),
+				ProviderType:  types.StringValue("github"),
 				FullName:      types.StringValue("ndemeshchenko/tf-base"),
 				WebURL:        types.StringValue("https://github.com/ndemeshchenko/tf-base"),
 				DefaultBranch: types.StringValue("main"),
@@ -68,7 +68,7 @@ func TestMapVCSRepositoryToDataSource(t *testing.T) {
 			expected: vcsRepositoryDataSourceModel{
 				ID:            types.StringValue("repo-def"),
 				IntegrationID: types.StringValue("vcs-456"),
-				ProviderType:      types.StringValue("gitlab"),
+				ProviderType:  types.StringValue("gitlab"),
 				FullName:      types.StringValue("group/infra-modules"),
 				WebURL:        types.StringValue("https://gitlab.example.com/group/infra-modules"),
 				DefaultBranch: types.StringValue("develop"),
