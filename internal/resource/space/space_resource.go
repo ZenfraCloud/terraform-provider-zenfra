@@ -66,6 +66,11 @@ func (r *SpaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Description: "Optional parent space ID for hierarchical organization.",
 				Optional:    true,
 			},
+			"inherit_bundles": schema.BoolAttribute{
+				Description: "Whether to inherit bundles from parent spaces.",
+				Optional:    true,
+				Computed:    true,
+			},
 			"created_at": schema.StringAttribute{
 				Description: "Timestamp when the space was created.",
 				Computed:    true,
@@ -121,6 +126,10 @@ func (r *SpaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if !plan.ParentSpaceID.IsNull() {
 		parentID := plan.ParentSpaceID.ValueString()
 		createReq.ParentID = &parentID
+	}
+
+	if !plan.InheritBundles.IsNull() {
+		createReq.InheritBundles = plan.InheritBundles.ValueBool()
 	}
 
 	// Create the space
@@ -193,6 +202,11 @@ func (r *SpaceResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if !plan.Description.Equal(state.Description) {
 		desc := plan.Description.ValueString()
 		updateReq.Description = &desc
+	}
+
+	if !plan.InheritBundles.Equal(state.InheritBundles) {
+		v := plan.InheritBundles.ValueBool()
+		updateReq.InheritBundles = &v
 	}
 
 	// Update the space

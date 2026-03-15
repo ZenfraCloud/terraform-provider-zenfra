@@ -10,6 +10,6 @@ terraform {
 }
 
 provider "zenfra" {
-  # endpoint  = "https://app.zenfra.io"  # Optional: defaults to https://app.zenfra.io
+  # endpoint  = "https://api.zenfra.cloud"  # Optional: defaults to https://api.zenfra.cloud
   # api_token = "your-api-token"          # Or set ZENFRA_API_TOKEN env var
 }

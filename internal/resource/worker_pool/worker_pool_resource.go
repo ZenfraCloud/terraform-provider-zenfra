@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -85,10 +84,8 @@ func (r *WorkerPoolResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			},
 			"active": schema.BoolAttribute{
 				Description: "Whether the worker pool is active.",
+				Optional:    true,
 				Computed:    true,
-				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"active_workers_count": schema.Int64Attribute{
 				Description: "The number of active workers in the pool.",
@@ -222,6 +219,11 @@ func (r *WorkerPoolResource) Update(ctx context.Context, req resource.UpdateRequ
 	if !plan.Name.Equal(state.Name) {
 		name := plan.Name.ValueString()
 		updateReq.Name = &name
+	}
+
+	if !plan.Active.Equal(state.Active) {
+		v := plan.Active.ValueBool()
+		updateReq.Active = &v
 	}
 
 	// Update the worker pool

@@ -169,14 +169,17 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"triggers": schema.SingleNestedAttribute{
 				Description: "Stack trigger configuration.",
 				Optional:    true,
+				Computed:    true,
 				Attributes: map[string]schema.Attribute{
 					"on_push": schema.SingleNestedAttribute{
 						Description: "Push-based trigger configuration.",
 						Optional:    true,
+						Computed:    true,
 						Attributes: map[string]schema.Attribute{
 							"enabled": schema.BoolAttribute{
 								Description: "Whether push triggers are enabled.",
 								Optional:    true,
+								Computed:    true,
 							},
 							"paths": schema.ListAttribute{
 								Description: "Optional list of paths to watch for changes.",
@@ -290,7 +293,7 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	// Set triggers if provided
-	if !plan.Triggers.IsNull() {
+	if !plan.Triggers.IsNull() && !plan.Triggers.IsUnknown() {
 		var triggersModel TriggersModel
 		diags = plan.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})
 		resp.Diagnostics.Append(diags...)
@@ -399,7 +402,7 @@ func (r *StackResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	// Check for trigger changes
-	if !plan.Triggers.Equal(state.Triggers) {
+	if !plan.Triggers.IsUnknown() && !plan.Triggers.Equal(state.Triggers) {
 		var triggersModel TriggersModel
 		diags = plan.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})
 		resp.Diagnostics.Append(diags...)

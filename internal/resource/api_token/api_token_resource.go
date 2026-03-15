@@ -53,6 +53,14 @@ func (r *APITokenResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Description: "Description of the API token.",
 				Optional:    true,
 			},
+			"role": schema.StringAttribute{
+				Description: "The role for this API token (read, write, admin).",
+				Required:    true,
+			},
+			"expires_in_days": schema.Int64Attribute{
+				Description: "Number of days until the token expires. 0 means no expiration. Defaults to 90 days if not specified.",
+				Optional:    true,
+			},
 			"token": schema.StringAttribute{
 				Description: "The API token value. Only available after creation.",
 				Computed:    true,
@@ -60,6 +68,21 @@ func (r *APITokenResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"token_prefix": schema.StringAttribute{
+				Description: "The first 8 characters of the token for identification.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"usage_count": schema.Int64Attribute{
+				Description: "Number of times the token has been used.",
+				Computed:    true,
+			},
+			"last_used_at": schema.StringAttribute{
+				Description: "Timestamp when the token was last used.",
+				Computed:    true,
 			},
 			"created_at": schema.StringAttribute{
 				Description: "Timestamp when the token was created.",
@@ -107,9 +130,14 @@ func (r *APITokenResource) Create(ctx context.Context, req resource.CreateReques
 
 	createReq := zenfraclient.CreateTokenRequest{
 		Name: plan.Name.ValueString(),
+		Role: plan.Role.ValueString(),
 	}
 	if !plan.Description.IsNull() {
 		createReq.Description = plan.Description.ValueString()
+	}
+	if !plan.ExpiresInDays.IsNull() {
+		v := plan.ExpiresInDays.ValueInt64()
+		createReq.ExpiresIn = &v
 	}
 
 	createResp, err := r.client.CreateToken(ctx, createReq)
@@ -120,6 +148,7 @@ func (r *APITokenResource) Create(ctx context.Context, req resource.CreateReques
 
 	state := mapTokenToState(&createResp.TokenObj)
 	state.Token = types.StringValue(createResp.Token)
+	state.ExpiresInDays = plan.ExpiresInDays
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
@@ -143,8 +172,9 @@ func (r *APITokenResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	newState := mapTokenToState(token)
-	// Preserve the write-once token value from current state
+	// Preserve write-once values from current state
 	newState.Token = state.Token
+	newState.ExpiresInDays = state.ExpiresInDays
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
@@ -165,6 +195,7 @@ func (r *APITokenResource) Update(ctx context.Context, req resource.UpdateReques
 
 	newState := mapTokenToState(token)
 	newState.Token = state.Token
+	newState.ExpiresInDays = state.ExpiresInDays
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 

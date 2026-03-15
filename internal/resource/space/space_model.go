@@ -14,6 +14,7 @@ type SpaceModel struct {
 	Name           types.String `tfsdk:"name"`
 	Description    types.String `tfsdk:"description"`
 	ParentSpaceID  types.String `tfsdk:"parent_space_id"`
+	InheritBundles types.Bool   `tfsdk:"inherit_bundles"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
 }
@@ -24,6 +25,7 @@ func mapAPISpaceToModel(space *zenfraclient.Space) SpaceModel {
 		ID:             types.StringValue(space.ID),
 		OrganizationID: types.StringValue(space.OrganizationID),
 		Name:           types.StringValue(space.Name),
+		InheritBundles: types.BoolValue(space.InheritBundles),
 		CreatedAt:      types.StringValue(space.CreatedAt.Format("2006-01-02T15:04:05Z07:00")),
 		UpdatedAt:      types.StringValue(space.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")),
 	}

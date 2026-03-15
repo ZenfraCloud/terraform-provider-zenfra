@@ -41,7 +41,7 @@ func (c *Client) ListBundles(ctx context.Context) ([]Bundle, error) {
 // UpdateBundle updates bundle metadata.
 func (c *Client) UpdateBundle(ctx context.Context, id string, req UpdateBundleRequest) (*Bundle, error) {
 	var bundle Bundle
-	if err := c.doJSON(ctx, http.MethodPatch, "/api/v1/bundles/"+id, req, &bundle); err != nil {
+	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/bundles/"+id, req, &bundle); err != nil {
 		return nil, fmt.Errorf("update bundle: %w", err)
 	}
 	return &bundle, nil

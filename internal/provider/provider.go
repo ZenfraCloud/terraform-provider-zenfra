@@ -15,6 +15,7 @@ import (
 	dsCurrentOrg "github.com/zenfra/terraform-provider-zenfra/internal/datasource/current_organization"
 	dsSpace "github.com/zenfra/terraform-provider-zenfra/internal/datasource/space"
 	dsStack "github.com/zenfra/terraform-provider-zenfra/internal/datasource/stack"
+	dsVCS "github.com/zenfra/terraform-provider-zenfra/internal/datasource/vcs_integration"
 	dsWorkerPool "github.com/zenfra/terraform-provider-zenfra/internal/datasource/worker_pool"
 	resAPIToken "github.com/zenfra/terraform-provider-zenfra/internal/resource/api_token"
 	resBundle "github.com/zenfra/terraform-provider-zenfra/internal/resource/bundle"
@@ -27,7 +28,7 @@ import (
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
-const defaultEndpoint = "https://app.zenfra.io"
+const defaultEndpoint = "https://api.zenfra.cloud"
 
 // Ensure ZenfraProvider satisfies the provider.Provider interface.
 var _ provider.Provider = &ZenfraProvider{}
@@ -62,7 +63,7 @@ func (p *ZenfraProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 		Description: "The Zenfra provider enables managing infrastructure-as-code resources on the Zenfra platform.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				Description: "The Zenfra API endpoint URL. Defaults to https://app.zenfra.io. Can be set via ZENFRA_API_ENDPOINT environment variable.",
+				Description: "The Zenfra API endpoint URL. Defaults to https://api.zenfra.cloud. Can be set via ZENFRA_API_ENDPOINT environment variable.",
 				Optional:    true,
 			},
 			"api_token": schema.StringAttribute{
@@ -141,5 +142,7 @@ func (p *ZenfraProvider) DataSources(_ context.Context) []func() datasource.Data
 		dsWorkerPool.NewWorkerPoolDataSource,
 		dsWorkerPool.NewWorkerPoolsDataSource,
 		dsCurrentOrg.NewCurrentOrganizationDataSource,
+		dsVCS.NewVCSIntegrationDataSource,
+		dsVCS.NewVCSIntegrationsDataSource,
 	}
 }
