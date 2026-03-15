@@ -1,0 +1,54 @@
+---
+page_title: "Zenfra Provider"
+subcategory: ""
+description: |-
+  The Zenfra provider manages infrastructure-as-code resources on the Zenfra platform.
+---
+
+# Zenfra Provider
+
+The Zenfra provider enables you to manage [Zenfra](https://zenfra.cloud) resources using Terraform or OpenTofu. It supports managing spaces, stacks, worker pools, configuration bundles, API tokens, VCS integrations, and more.
+
+## Authentication
+
+The provider requires an API token to authenticate with the Zenfra API. You can provide it in two ways:
+
+### Environment variable (recommended)
+
+```shell
+export ZENFRA_API_TOKEN="your-api-token"
+```
+
+```terraform
+provider "zenfra" {}
+```
+
+### Provider configuration
+
+```terraform
+provider "zenfra" {
+  api_token = var.zenfra_api_token
+}
+```
+
+## Custom endpoint
+
+By default, the provider connects to `https://api.zenfra.cloud`. You can override this for self-hosted or development environments:
+
+```terraform
+provider "zenfra" {
+  endpoint = "https://api.your-instance.example.com"
+}
+```
+
+Or via environment variable:
+
+```shell
+export ZENFRA_API_ENDPOINT="https://api.your-instance.example.com"
+```
+
+## Example Usage
+
+{{ tffile "examples/provider/provider.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

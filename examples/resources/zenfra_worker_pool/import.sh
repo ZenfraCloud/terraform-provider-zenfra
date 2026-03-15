@@ -1,0 +1,1 @@
+terraform import zenfra_worker_pool.private $WORKER_POOL_ID

@@ -41,5 +41,8 @@ terraform.rc
 .DS_Store
 Thumbs.db
 
+# Generated schema (used by tfplugindocs)
+providers-schema.json
+
 # GoReleaser
 dist/
