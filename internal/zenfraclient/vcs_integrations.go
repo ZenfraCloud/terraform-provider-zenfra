@@ -27,13 +27,33 @@ func (c *Client) GetVCSIntegration(ctx context.Context, id string) (*VCSIntegrat
 	return &integration, nil
 }
 
-// ListVCSIntegrations returns all VCS integrations in the organization.
-func (c *Client) ListVCSIntegrations(ctx context.Context) ([]VCSIntegration, error) {
-	var integrations []VCSIntegration
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/vcs/integrations", nil, &integrations); err != nil {
+// ListVCSIntegrationsOptions are optional query parameters for listing VCS integrations.
+type ListVCSIntegrationsOptions struct {
+	Provider *string
+	Status   *string
+}
+
+// ListVCSIntegrations returns all VCS integrations in the organization, optionally filtered.
+func (c *Client) ListVCSIntegrations(ctx context.Context, opts *ListVCSIntegrationsOptions) ([]VCSIntegration, error) {
+	path := "/api/v1/vcs/integrations"
+	sep := "?"
+	if opts != nil {
+		if opts.Provider != nil {
+			path += sep + "provider=" + *opts.Provider
+			sep = "&"
+		}
+		if opts.Status != nil {
+			path += sep + "status=" + *opts.Status
+		}
+	}
+
+	var resp struct {
+		Integrations []VCSIntegration `json:"integrations"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
 		return nil, fmt.Errorf("list vcs integrations: %w", err)
 	}
-	return integrations, nil
+	return resp.Integrations, nil
 }
 
 // UpdateVCSIntegration updates an existing VCS integration.

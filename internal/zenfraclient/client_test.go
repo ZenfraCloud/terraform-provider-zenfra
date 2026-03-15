@@ -615,6 +615,34 @@ func TestCRUD_VCSIntegration(t *testing.T) {
 	mux.HandleFunc("DELETE /api/v1/vcs/integrations/vcs-1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /api/v1/vcs/integrations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		all := []VCSIntegration{
+			{ID: "vcs-1", Provider: "github", Status: "active"},
+			{ID: "vcs-2", Provider: "gitlab", Status: "inactive"},
+		}
+
+		provider := r.URL.Query().Get("provider")
+		status := r.URL.Query().Get("status")
+
+		var filtered []VCSIntegration
+		for _, v := range all {
+			if provider != "" && v.Provider != provider {
+				continue
+			}
+			if status != "" && v.Status != status {
+				continue
+			}
+			filtered = append(filtered, v)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"integrations": filtered,
+			"total":        len(filtered),
+			"limit":        100,
+			"offset":       0,
+		})
+	})
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -641,6 +669,38 @@ func TestCRUD_VCSIntegration(t *testing.T) {
 	}
 	if got.GitHub == nil || got.GitHub.InstallationID != 12345 {
 		t.Errorf("expected github installation_id 12345, got %+v", got.GitHub)
+	}
+
+	// List (no filter)
+	all, err := client.ListVCSIntegrations(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListVCSIntegrations: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 integrations, got %d", len(all))
+	}
+
+	// List (filter by provider)
+	ghProvider := "github"
+	ghOnly, err := client.ListVCSIntegrations(ctx, &ListVCSIntegrationsOptions{Provider: &ghProvider})
+	if err != nil {
+		t.Fatalf("ListVCSIntegrations(provider=github): %v", err)
+	}
+	if len(ghOnly) != 1 {
+		t.Errorf("expected 1 github integration, got %d", len(ghOnly))
+	}
+	if len(ghOnly) > 0 && ghOnly[0].Provider != "github" {
+		t.Errorf("expected provider github, got %s", ghOnly[0].Provider)
+	}
+
+	// List (filter by status)
+	activeStatus := "active"
+	activeOnly, err := client.ListVCSIntegrations(ctx, &ListVCSIntegrationsOptions{Status: &activeStatus})
+	if err != nil {
+		t.Fatalf("ListVCSIntegrations(status=active): %v", err)
+	}
+	if len(activeOnly) != 1 {
+		t.Errorf("expected 1 active integration, got %d", len(activeOnly))
 	}
 
 	// Delete

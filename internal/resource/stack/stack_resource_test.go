@@ -1,5 +1,5 @@
 // ABOUTME: Unit tests for the zenfra_stack resource model mapping.
-// ABOUTME: Verifies correct conversion of nested source, IAC, and trigger types.
+// ABOUTME: Verifies correct conversion of nested source and IAC types.
 package stack
 
 import (
@@ -42,12 +42,6 @@ func TestMapStackToState_RawGitSource(t *testing.T) {
 					Name: "main",
 				},
 				Path: "infra",
-			},
-		},
-		Triggers: zenfraclient.StackTriggers{
-			OnPush: zenfraclient.StackTriggerOnPush{
-				Enabled: true,
-				Paths:   []string{"infra/**", "modules/**"},
 			},
 		},
 		CreatedBy: "user-111",
@@ -130,37 +124,6 @@ func TestMapStackToState_RawGitSource(t *testing.T) {
 	if refModel.Name.ValueString() != "main" {
 		t.Errorf("expected ref name 'main', got %s", refModel.Name.ValueString())
 	}
-
-	// Verify triggers
-	var triggersModel TriggersModel
-	diags = model.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})
-	if diags.HasError() {
-		t.Fatalf("failed to extract triggers model: %v", diags.Errors())
-	}
-
-	var onPushModel OnPushModel
-	diags = triggersModel.OnPush.As(ctx, &onPushModel, basetypes.ObjectAsOptions{})
-	if diags.HasError() {
-		t.Fatalf("failed to extract on_push model: %v", diags.Errors())
-	}
-	if onPushModel.Enabled.ValueBool() != true {
-		t.Errorf("expected on_push enabled true, got %v", onPushModel.Enabled.ValueBool())
-	}
-
-	var paths []string
-	diags = onPushModel.Paths.ElementsAs(ctx, &paths, false)
-	if diags.HasError() {
-		t.Fatalf("failed to extract paths: %v", diags.Errors())
-	}
-	if len(paths) != 2 {
-		t.Fatalf("expected 2 paths, got %d", len(paths))
-	}
-	if paths[0] != "infra/**" {
-		t.Errorf("expected first path 'infra/**', got %s", paths[0])
-	}
-	if paths[1] != "modules/**" {
-		t.Errorf("expected second path 'modules/**', got %s", paths[1])
-	}
 }
 
 func TestMapStackToState_VCSSource(t *testing.T) {
@@ -189,12 +152,6 @@ func TestMapStackToState_VCSSource(t *testing.T) {
 					Name: "v1.0.0",
 				},
 				Path: "terraform",
-			},
-		},
-		Triggers: zenfraclient.StackTriggers{
-			OnPush: zenfraclient.StackTriggerOnPush{
-				Enabled: false,
-				Paths:   []string{},
 			},
 		},
 		CreatedBy: "user-333",
@@ -299,44 +256,6 @@ func TestBuildSourceFromModel_RawGit(t *testing.T) {
 	}
 	if source.RawGit.Path != "stacks/prod" {
 		t.Errorf("expected path 'stacks/prod', got %s", source.RawGit.Path)
-	}
-}
-
-func TestBuildTriggersFromModel(t *testing.T) {
-	ctx := context.Background()
-
-	// Create a Terraform triggers model
-	paths, _ := types.ListValueFrom(ctx, types.StringType, []string{"src/**", "config/**"})
-
-	onPushObj, _ := types.ObjectValueFrom(ctx, OnPushModelAttrTypes, &OnPushModel{
-		Enabled: types.BoolValue(true),
-		Paths:   paths,
-	})
-
-	triggersObj, _ := types.ObjectValueFrom(ctx, TriggersModelAttrTypes, &TriggersModel{
-		OnPush: onPushObj,
-	})
-
-	var triggersModel TriggersModel
-	_ = triggersObj.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})
-
-	// Build API triggers from model
-	triggers, diags := buildTriggersFromModel(ctx, &triggersModel)
-	if diags.HasError() {
-		t.Fatalf("buildTriggersFromModel returned errors: %v", diags.Errors())
-	}
-
-	if triggers.OnPush.Enabled != true {
-		t.Errorf("expected on_push enabled true, got %v", triggers.OnPush.Enabled)
-	}
-	if len(triggers.OnPush.Paths) != 2 {
-		t.Fatalf("expected 2 paths, got %d", len(triggers.OnPush.Paths))
-	}
-	if triggers.OnPush.Paths[0] != "src/**" {
-		t.Errorf("expected first path 'src/**', got %s", triggers.OnPush.Paths[0])
-	}
-	if triggers.OnPush.Paths[1] != "config/**" {
-		t.Errorf("expected second path 'config/**', got %s", triggers.OnPush.Paths[1])
 	}
 }
 
