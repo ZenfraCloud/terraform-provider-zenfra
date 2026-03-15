@@ -345,13 +345,13 @@ type OrganizationBilling struct {
 
 // Organization represents the current user's organization.
 type Organization struct {
-	ID        string                `json:"id"`
-	Name      string                `json:"name"`
-	Slug      string                `json:"slug"`
-	Settings  OrganizationSettings  `json:"settings"`
-	Billing   *OrganizationBilling  `json:"billing,omitempty"`
-	CreatedAt string                `json:"created_at"`
-	UpdatedAt string                `json:"updated_at,omitempty"`
+	ID        string               `json:"id"`
+	Name      string               `json:"name"`
+	Slug      string               `json:"slug"`
+	Settings  OrganizationSettings `json:"settings"`
+	Billing   *OrganizationBilling `json:"billing,omitempty"`
+	CreatedAt string               `json:"created_at"`
+	UpdatedAt string               `json:"updated_at,omitempty"`
 }
 
 // --- VCS Integration types ---

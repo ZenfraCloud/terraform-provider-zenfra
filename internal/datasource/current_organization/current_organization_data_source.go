@@ -18,13 +18,13 @@ type currentOrganizationDataSource struct {
 }
 
 type currentOrganizationDataSourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Slug      types.String `tfsdk:"slug"`
+	ID        types.String      `tfsdk:"id"`
+	Name      types.String      `tfsdk:"name"`
+	Slug      types.String      `tfsdk:"slug"`
 	Settings  *orgSettingsModel `tfsdk:"settings"`
 	Billing   *orgBillingModel  `tfsdk:"billing"`
-	CreatedAt types.String `tfsdk:"created_at"`
-	UpdatedAt types.String `tfsdk:"updated_at"`
+	CreatedAt types.String      `tfsdk:"created_at"`
+	UpdatedAt types.String      `tfsdk:"updated_at"`
 }
 
 type orgIACToolModel struct {

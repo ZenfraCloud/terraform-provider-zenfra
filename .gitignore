@@ -2,7 +2,7 @@
 # ABOUTME: Excludes Go binaries, Terraform artifacts, IDE files, and OS metadata.
 
 # Go binaries
-terraform-provider-zenfra
+/terraform-provider-zenfra
 *.exe
 *.exe~
 *.dll
@@ -43,6 +43,9 @@ Thumbs.db
 
 # Generated schema (used by tfplugindocs)
 providers-schema.json
+
+# Temporary files
+tmp/
 
 # GoReleaser
 dist/

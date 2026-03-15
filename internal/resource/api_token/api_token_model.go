@@ -9,18 +9,18 @@ import (
 
 // APITokenModel represents the Terraform state model for a Zenfra API token.
 type APITokenModel struct {
-	ID           types.String `tfsdk:"id"`
-	Name         types.String `tfsdk:"name"`
-	Description  types.String `tfsdk:"description"`
-	Role         types.String `tfsdk:"role"`
+	ID            types.String `tfsdk:"id"`
+	Name          types.String `tfsdk:"name"`
+	Description   types.String `tfsdk:"description"`
+	Role          types.String `tfsdk:"role"`
 	ExpiresInDays types.Int64  `tfsdk:"expires_in_days"`
-	Token        types.String `tfsdk:"token"`
-	TokenPrefix  types.String `tfsdk:"token_prefix"`
-	UsageCount   types.Int64  `tfsdk:"usage_count"`
-	LastUsedAt   types.String `tfsdk:"last_used_at"`
-	CreatedAt    types.String `tfsdk:"created_at"`
-	ExpiresAt    types.String `tfsdk:"expires_at"`
-	Active       types.Bool   `tfsdk:"active"`
+	Token         types.String `tfsdk:"token"`
+	TokenPrefix   types.String `tfsdk:"token_prefix"`
+	UsageCount    types.Int64  `tfsdk:"usage_count"`
+	LastUsedAt    types.String `tfsdk:"last_used_at"`
+	CreatedAt     types.String `tfsdk:"created_at"`
+	ExpiresAt     types.String `tfsdk:"expires_at"`
+	Active        types.Bool   `tfsdk:"active"`
 }
 
 // mapTokenToState converts an API Token response to an APITokenModel.
