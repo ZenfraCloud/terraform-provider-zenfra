@@ -54,6 +54,17 @@ jobs:
           EOF
           TF_CLI_CONFIG_FILE="$TMPDIR/.terraformrc" terraform -chdir="$TMPDIR" providers schema -json > providers-schema.json
           rm -rf "$TMPDIR"
+          python3 -c "
+          import json
+          with open('providers-schema.json') as f:
+              d = json.load(f)
+          s = d['provider_schemas']
+          key = list(s.keys())[0]
+          if key != 'zenfra':
+              s['zenfra'] = s.pop(key)
+              with open('providers-schema.json', 'w') as f:
+                  json.dump(d, f)
+          "
 
       - name: Generate documentation
         run: cd tools && go generate ./...
