@@ -20,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/zenfra/zenfra",
+		Address: "registry.terraform.io/ZenfraCloud/zenfra",
 		Debug:   debug,
 	}
 

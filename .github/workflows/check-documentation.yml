@@ -35,7 +35,7 @@ jobs:
           cat > "$TMPDIR/.terraformrc" <<'EOF'
           provider_installation {
             dev_overrides {
-              "registry.terraform.io/zenfra/zenfra" = "${{ github.workspace }}"
+              "registry.terraform.io/ZenfraCloud/zenfra" = "${{ github.workspace }}"
             }
             direct {}
           }
@@ -44,7 +44,7 @@ jobs:
           terraform {
             required_providers {
               zenfra = {
-                source = "registry.terraform.io/zenfra/zenfra"
+                source = "registry.terraform.io/ZenfraCloud/zenfra"
               }
             }
           }

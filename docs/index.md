@@ -56,7 +56,7 @@ export ZENFRA_API_ENDPOINT="https://api.your-instance.example.com"
 terraform {
   required_providers {
     zenfra = {
-      source = "registry.terraform.io/zenfra/zenfra"
+      source = "registry.terraform.io/ZenfraCloud/zenfra"
     }
   }
 }

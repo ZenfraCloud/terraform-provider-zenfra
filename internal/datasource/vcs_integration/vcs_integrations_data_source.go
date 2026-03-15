@@ -91,7 +91,7 @@ func (d *vcsIntegrationsDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	integrations, err := d.client.ListVCSIntegrations(ctx)
+	integrations, err := d.client.ListVCSIntegrations(ctx, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list VCS integrations, got error: %s", err))
 		return

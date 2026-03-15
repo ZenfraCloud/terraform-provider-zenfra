@@ -4,7 +4,7 @@
 terraform {
   required_providers {
     zenfra = {
-      source = "registry.terraform.io/zenfra/zenfra"
+      source = "registry.terraform.io/ZenfraCloud/zenfra"
     }
   }
 }
