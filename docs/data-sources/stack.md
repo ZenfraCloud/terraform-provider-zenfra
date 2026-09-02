@@ -35,6 +35,7 @@ data "zenfra_stack" "app" {
 - `organization_id` (String) The organization ID that owns this stack.
 - `source` (Attributes) Source code configuration for the stack. (see [below for nested schema](#nestedatt--source))
 - `space_id` (String) The space ID containing this stack.
+- `state_management` (String) Who owns this stack's Terraform state.
 - `triggers` (Attributes) Automation trigger configuration. (see [below for nested schema](#nestedatt--triggers))
 - `updated_at` (String) RFC3339 timestamp when the stack was last updated.
 - `updated_by` (String) The user ID who last updated this stack.
