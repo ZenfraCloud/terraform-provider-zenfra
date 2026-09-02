@@ -30,9 +30,21 @@ func NewStackResource() resource.Resource {
 	return &StackResource{}
 }
 
+// stackClient is every API call the resource makes, so Create's mismatch and
+// cleanup branches are testable without a live server. *zenfraclient.Client
+// satisfies it unchanged.
+type stackClient interface {
+	CreateStack(ctx context.Context, req zenfraclient.CreateStackRequest) (*zenfraclient.Stack, error)
+	GetStack(ctx context.Context, id string) (*zenfraclient.Stack, error)
+	UpdateStack(ctx context.Context, id string, req zenfraclient.UpdateStackRequest) (*zenfraclient.Stack, error)
+	SetStackSource(ctx context.Context, id string, source zenfraclient.StackSource) error
+	SetStackTriggers(ctx context.Context, id string, triggers zenfraclient.StackTriggers) error
+	DeleteStack(ctx context.Context, id string) error
+}
+
 // StackResource is the resource implementation.
 type StackResource struct {
-	client *zenfraclient.Client
+	client stackClient
 }
 
 // Metadata returns the resource type name.
@@ -279,6 +291,21 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	// The plan value is unknown for an omitted Optional+Computed attribute on
+	// create, so the configuration is the only honest source of intent.
+	var config StackModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	stateBlock, stateDiags := stateManagementForCreate(path.Root("state_management"), config.StateManagement)
+	resp.Diagnostics.Append(stateDiags...)
+	if resp.Diagnostics.HasError() {
+		return // refuse before the POST: nothing must be created
+	}
+	requested := requestedEffectiveMode(config.StateManagement)
+
 	// Build create request
 	createReq := zenfraclient.CreateStackRequest{
 		SpaceID:         plan.SpaceID.ValueString(),
@@ -288,7 +315,8 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 			Engine:  iacModel.Engine.ValueString(),
 			Version: iacModel.Version.ValueString(),
 		},
-		Source: *source,
+		Source:          *source,
+		StateManagement: stateBlock,
 	}
 
 	if !plan.WorkerPoolID.IsNull() {
@@ -306,29 +334,12 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// Set triggers if provided
-	if !plan.Triggers.IsNull() && !plan.Triggers.IsUnknown() {
-		var triggersModel TriggersModel
-		diags = plan.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
+	if handleCreatedMode(ctx, r.client, stack, requested, resp) {
+		return
+	}
 
-		triggers, diags := buildTriggersFromModel(ctx, &triggersModel)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		err = r.client.SetStackTriggers(ctx, stack.ID, *triggers)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Setting Stack Triggers",
-				fmt.Sprintf("Could not set triggers for stack: %s", err.Error()),
-			)
-			return
-		}
+	if r.setTriggersOnCreate(ctx, &plan, stack.ID, resp) {
+		return
 	}
 
 	// Map response to state
@@ -340,6 +351,37 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
+}
+
+// setTriggersOnCreate applies the planned triggers to a freshly created stack,
+// reporting whether Create must stop.
+func (r *StackResource) setTriggersOnCreate(
+	ctx context.Context, plan *StackModel, stackID string, resp *resource.CreateResponse,
+) (stop bool) {
+	if plan.Triggers.IsNull() || plan.Triggers.IsUnknown() {
+		return false
+	}
+
+	var triggersModel TriggersModel
+	resp.Diagnostics.Append(plan.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return true
+	}
+
+	triggers, diags := buildTriggersFromModel(ctx, &triggersModel)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return true
+	}
+
+	if err := r.client.SetStackTriggers(ctx, stackID, *triggers); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Setting Stack Triggers",
+			fmt.Sprintf("Could not set triggers for stack: %s", err.Error()),
+		)
+		return true
+	}
+	return false
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -626,6 +668,7 @@ func mapStackToState(ctx context.Context, stack *zenfraclient.Stack) (*StackMode
 		SpaceID:         types.StringValue(stack.SpaceID),
 		Name:            types.StringValue(stack.Name),
 		AllowPublicPool: types.BoolValue(stack.AllowPublicPool),
+		StateManagement: types.StringValue(zenfraclient.EffectiveStateMode(stack.StateManagement)),
 		IAC:             iacObj,
 		Source:          sourceObj,
 		Triggers:        triggersObj,
