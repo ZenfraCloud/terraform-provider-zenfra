@@ -65,6 +65,23 @@ func TestStateManagementGuard_RefusesBothTransitions(t *testing.T) {
 	}
 }
 
+// State written before this attribute existed decodes with a null value against
+// the current schema, while the resource state itself is non-null. That stack is
+// managed - external did not exist yet - so an explicit external must still be
+// refused, not waved through because the prior attribute happens to be null.
+func TestStateManagementGuard_RefusesExternalAgainstPreFeatureState(t *testing.T) {
+	resp := runGuard(t, nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringValue("external"))
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("a pre-feature stack is managed and must not be changed to external in place")
+	}
+	detail := resp.Diagnostics.Errors()[0].Detail()
+	for _, want := range []string{"managed", "external"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("error must mention %q, got: %s", want, detail)
+		}
+	}
+}
+
 func TestStateManagementGuard_AllowsEverythingElse(t *testing.T) {
 	cases := map[string]struct {
 		rawState, rawPlan tftypes.Value
@@ -76,6 +93,13 @@ func TestStateManagementGuard_AllowsEverythingElse(t *testing.T) {
 		"unchanged":      {nonNullRaw(), nonNullRaw(), types.StringValue("external"), types.StringValue("external")},
 		"omitted config": {nonNullRaw(), nonNullRaw(), types.StringValue("external"), types.StringNull()},
 		"unknown config": {nonNullRaw(), nonNullRaw(), types.StringValue("external"), types.StringUnknown()},
+		// A pre-feature stack is managed, so asking for managed is not a change.
+		"pre-feature state, managed configured": {
+			nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringValue("managed"),
+		},
+		"pre-feature state, omitted config": {
+			nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringNull(),
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -100,7 +100,13 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed:   true,
 				Validators: []validator.String{stateManagementValidator{}},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					// UseNonNullStateForUnknown, not UseStateForUnknown: state
+					// written before this attribute existed decodes as null, and
+					// UseStateForUnknown would copy that null into the plan, so an
+					// apply that reads back the real mode fails as an inconsistent
+					// result. Leaving it unknown lets the apply fill it in. Both
+					// are no-ops on create, where there is no prior state.
+					stringplanmodifier.UseNonNullStateForUnknown(),
 					stateManagementGuard{},
 				},
 			},

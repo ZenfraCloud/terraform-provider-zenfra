@@ -34,15 +34,24 @@ func (stateManagementGuard) PlanModifyString(
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return // creation or destroy: nothing to compare
 	}
-	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+	if req.StateValue.IsUnknown() {
 		return
 	}
 	// ConfigValue, not PlanValue: only an explicitly configured mode is a request
-	// to change. An omitted attribute is filled from prior state by UseStateForUnknown.
+	// to change. An omitted attribute is filled from prior state by the
+	// UseNonNullStateForUnknown modifier that runs before this one.
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	prior, wanted := req.StateValue.ValueString(), req.ConfigValue.ValueString()
+	// A null prior value is not "no opinion": state written before this attribute
+	// existed decodes as null against the current schema, and such a stack is
+	// managed, because external did not exist yet. That is the same contract as
+	// zenfraclient.EffectiveStateMode, which reads an absent block as managed.
+	prior := zenfraclient.StateModeManaged
+	if !req.StateValue.IsNull() {
+		prior = req.StateValue.ValueString()
+	}
+	wanted := req.ConfigValue.ValueString()
 	if prior == wanted {
 		return
 	}
