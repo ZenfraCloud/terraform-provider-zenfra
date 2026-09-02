@@ -81,6 +81,19 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"state_management": schema.StringAttribute{
+				Description: "Who owns this stack's Terraform state: \"managed\" (default, Zenfra " +
+					"stores it) or \"external\" (your own backend block in the source). Set at " +
+					"creation only; changing it is refused. Requires a worker advertising the " +
+					"external-state-v1 capability.",
+				Optional:   true,
+				Computed:   true,
+				Validators: []validator.String{stateManagementValidator{}},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stateManagementGuard{},
+				},
+			},
 			"iac": schema.SingleNestedAttribute{
 				Description: "Infrastructure as Code configuration.",
 				Required:    true,
