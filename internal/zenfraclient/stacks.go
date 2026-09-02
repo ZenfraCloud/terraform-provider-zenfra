@@ -1,5 +1,5 @@
 // ABOUTME: Stack CRUD methods for the Zenfra API client.
-// ABOUTME: Implements stack lifecycle plus variables, source, and trigger management endpoints.
+// ABOUTME: Implements stack lifecycle plus variables and source management endpoints.
 
 package zenfraclient
 
@@ -108,14 +108,6 @@ func (c *Client) SetStackVariables(ctx context.Context, stackID string, vars []S
 func (c *Client) SetStackSource(ctx context.Context, stackID string, source StackSource) error {
 	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/stacks/"+stackID+"/source", source, nil); err != nil {
 		return fmt.Errorf("set stack source: %w", err)
-	}
-	return nil
-}
-
-// SetStackTriggers updates the trigger configuration for a stack.
-func (c *Client) SetStackTriggers(ctx context.Context, stackID string, triggers StackTriggers) error {
-	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/stacks/"+stackID+"/triggers", triggers, nil); err != nil {
-		return fmt.Errorf("set stack triggers: %w", err)
 	}
 	return nil
 }

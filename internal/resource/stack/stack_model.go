@@ -1,5 +1,5 @@
 // ABOUTME: Terraform state models for the zenfra_stack resource.
-// ABOUTME: Maps between API Stack types and Terraform schema types including nested source/iac/triggers.
+// ABOUTME: Maps between API Stack types and Terraform schema types including nested source and iac.
 package stack
 
 import (
@@ -17,7 +17,6 @@ type StackModel struct {
 	AllowPublicPool types.Bool   `tfsdk:"allow_public_pool"`
 	IAC             types.Object `tfsdk:"iac"`
 	Source          types.Object `tfsdk:"source"`
-	Triggers        types.Object `tfsdk:"triggers"`
 	CreatedAt       types.String `tfsdk:"created_at"`
 	UpdatedAt       types.String `tfsdk:"updated_at"`
 	CreatedBy       types.String `tfsdk:"created_by"`
@@ -59,17 +58,6 @@ type SourceModel struct {
 	VCS    types.Object `tfsdk:"vcs"`
 }
 
-// OnPushModel represents the on_push trigger configuration.
-type OnPushModel struct {
-	Enabled types.Bool `tfsdk:"enabled"`
-	Paths   types.List `tfsdk:"paths"`
-}
-
-// TriggersModel represents the stack trigger configuration.
-type TriggersModel struct {
-	OnPush types.Object `tfsdk:"on_push"`
-}
-
 // IACModelAttrTypes defines the attribute types for IACModel.
 var IACModelAttrTypes = map[string]attr.Type{
 	"engine":  types.StringType,
@@ -103,15 +91,4 @@ var SourceModelAttrTypes = map[string]attr.Type{
 	"type":    types.StringType,
 	"raw_git": types.ObjectType{AttrTypes: RawGitModelAttrTypes},
 	"vcs":     types.ObjectType{AttrTypes: VCSModelAttrTypes},
-}
-
-// OnPushModelAttrTypes defines the attribute types for OnPushModel.
-var OnPushModelAttrTypes = map[string]attr.Type{
-	"enabled": types.BoolType,
-	"paths":   types.ListType{ElemType: types.StringType},
-}
-
-// TriggersModelAttrTypes defines the attribute types for TriggersModel.
-var TriggersModelAttrTypes = map[string]attr.Type{
-	"on_push": types.ObjectType{AttrTypes: OnPushModelAttrTypes},
 }

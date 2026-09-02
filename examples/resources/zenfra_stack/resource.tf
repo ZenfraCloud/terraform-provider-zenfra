@@ -20,12 +20,6 @@ resource "zenfra_stack" "app" {
     }
   }
 
-  triggers {
-    on_push {
-      enabled = true
-      paths   = ["stacks/app/**"]
-    }
-  }
 }
 
 # Stack using a VCS integration

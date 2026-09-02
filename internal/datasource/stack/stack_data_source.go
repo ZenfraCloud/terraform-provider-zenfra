@@ -1,5 +1,5 @@
 // ABOUTME: Data source for reading a single Zenfra stack by ID.
-// ABOUTME: Returns all stack attributes including nested source, IAC, and trigger configuration.
+// ABOUTME: Returns all stack attributes including nested source and IAC configuration.
 
 package stack
 
@@ -18,19 +18,18 @@ type stackDataSource struct {
 }
 
 type stackDataSourceModel struct {
-	ID              types.String        `tfsdk:"id"`
-	Name            types.String        `tfsdk:"name"`
-	SpaceID         types.String        `tfsdk:"space_id"`
-	OrganizationID  types.String        `tfsdk:"organization_id"`
-	WorkerPoolID    types.String        `tfsdk:"worker_pool_id"`
-	AllowPublicPool types.Bool          `tfsdk:"allow_public_pool"`
-	IAC             *iacConfigModel     `tfsdk:"iac"`
-	Source          *stackSourceModel   `tfsdk:"source"`
-	Triggers        *stackTriggersModel `tfsdk:"triggers"`
-	CreatedBy       types.String        `tfsdk:"created_by"`
-	CreatedAt       types.String        `tfsdk:"created_at"`
-	UpdatedAt       types.String        `tfsdk:"updated_at"`
-	UpdatedBy       types.String        `tfsdk:"updated_by"`
+	ID              types.String      `tfsdk:"id"`
+	Name            types.String      `tfsdk:"name"`
+	SpaceID         types.String      `tfsdk:"space_id"`
+	OrganizationID  types.String      `tfsdk:"organization_id"`
+	WorkerPoolID    types.String      `tfsdk:"worker_pool_id"`
+	AllowPublicPool types.Bool        `tfsdk:"allow_public_pool"`
+	IAC             *iacConfigModel   `tfsdk:"iac"`
+	Source          *stackSourceModel `tfsdk:"source"`
+	CreatedBy       types.String      `tfsdk:"created_by"`
+	CreatedAt       types.String      `tfsdk:"created_at"`
+	UpdatedAt       types.String      `tfsdk:"updated_at"`
+	UpdatedBy       types.String      `tfsdk:"updated_by"`
 }
 
 type iacConfigModel struct {
@@ -58,10 +57,6 @@ type stackSourceVCSModel struct {
 	RefType       types.String `tfsdk:"ref_type"`
 	RefName       types.String `tfsdk:"ref_name"`
 	Path          types.String `tfsdk:"path"`
-}
-
-type stackTriggersModel struct {
-	OnPushEnabled types.Bool `tfsdk:"on_push_enabled"`
 }
 
 var _ datasource.DataSource = &stackDataSource{}
@@ -179,16 +174,6 @@ func (d *stackDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 					},
 				},
 			},
-			"triggers": schema.SingleNestedAttribute{
-				MarkdownDescription: "Automation trigger configuration.",
-				Computed:            true,
-				Attributes: map[string]schema.Attribute{
-					"on_push_enabled": schema.BoolAttribute{
-						MarkdownDescription: "Whether push-based automation triggers are enabled.",
-						Computed:            true,
-					},
-				},
-			},
 			"created_by": schema.StringAttribute{
 				MarkdownDescription: "The user ID who created this stack.",
 				Computed:            true,
@@ -276,11 +261,6 @@ func (d *stackDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			RefName:       types.StringValue(stack.Source.VCS.Ref.Name),
 			Path:          types.StringValue(stack.Source.VCS.Path),
 		}
-	}
-
-	// Map Triggers
-	data.Triggers = &stackTriggersModel{
-		OnPushEnabled: types.BoolValue(stack.Triggers.OnPush.Enabled),
 	}
 
 	data.CreatedBy = types.StringValue(stack.CreatedBy)

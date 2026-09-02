@@ -12,14 +12,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	dsCloudIntegration "github.com/zenfra/terraform-provider-zenfra/internal/datasource/cloud_integration"
 	dsCurrentOrg "github.com/zenfra/terraform-provider-zenfra/internal/datasource/current_organization"
 	dsSpace "github.com/zenfra/terraform-provider-zenfra/internal/datasource/space"
 	dsStack "github.com/zenfra/terraform-provider-zenfra/internal/datasource/stack"
 	dsVCS "github.com/zenfra/terraform-provider-zenfra/internal/datasource/vcs_integration"
+	dsVCSRepo "github.com/zenfra/terraform-provider-zenfra/internal/datasource/vcs_repository"
 	dsWorkerPool "github.com/zenfra/terraform-provider-zenfra/internal/datasource/worker_pool"
 	resAPIToken "github.com/zenfra/terraform-provider-zenfra/internal/resource/api_token"
 	resBundle "github.com/zenfra/terraform-provider-zenfra/internal/resource/bundle"
 	resBundleAttachment "github.com/zenfra/terraform-provider-zenfra/internal/resource/bundle_attachment"
+	resCloudAttachment "github.com/zenfra/terraform-provider-zenfra/internal/resource/cloud_integration_attachment"
 	resSpace "github.com/zenfra/terraform-provider-zenfra/internal/resource/space"
 	resStack "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack"
 	resStackVars "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack_variables"
@@ -128,6 +131,7 @@ func (p *ZenfraProvider) Resources(_ context.Context) []func() resource.Resource
 		resWorkerPool.NewWorkerPoolResource,
 		resBundle.NewBundleResource,
 		resBundleAttachment.NewBundleAttachmentResource,
+		resCloudAttachment.NewCloudIntegrationAttachmentResource,
 		resStackVars.NewStackVariablesResource,
 		resAPIToken.NewAPITokenResource,
 		resVCS.NewVCSIntegrationResource,
@@ -144,5 +148,9 @@ func (p *ZenfraProvider) DataSources(_ context.Context) []func() datasource.Data
 		dsCurrentOrg.NewCurrentOrganizationDataSource,
 		dsVCS.NewVCSIntegrationDataSource,
 		dsVCS.NewVCSIntegrationsDataSource,
+		dsVCSRepo.NewVCSRepositoryDataSource,
+		dsVCSRepo.NewVCSRepositoriesDataSource,
+		dsCloudIntegration.NewCloudIntegrationDataSource,
+		dsCloudIntegration.NewCloudIntegrationsDataSource,
 	}
 }

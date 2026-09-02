@@ -412,6 +412,86 @@ type UpdateVCSIntegrationRequest struct {
 	Status      *string `json:"status,omitempty"`
 }
 
+// --- VCS Repository types ---
+
+// VCSProviderRepo holds provider-specific repository metadata.
+type VCSProviderRepo struct {
+	ID            string `json:"id"`
+	FullName      string `json:"full_name"`
+	WebURL        string `json:"web_url"`
+	DefaultBranch string `json:"default_branch"`
+	Visibility    string `json:"visibility"`
+	Archived      bool   `json:"archived"`
+}
+
+// VCSRepository represents a repository discovered via a VCS integration.
+type VCSRepository struct {
+	ID            string          `json:"id"`
+	IntegrationID string          `json:"integration_id"`
+	Provider      string          `json:"provider"`
+	ProviderRepo  VCSProviderRepo `json:"provider_repo"`
+	Enabled       bool            `json:"enabled"`
+	CreatedAt     string          `json:"created_at"`
+	UpdatedAt     string          `json:"updated_at"`
+}
+
+// --- Cloud Integration types ---
+
+// CloudAWSConfig holds AWS-specific configuration for a cloud integration.
+type CloudAWSConfig struct {
+	RoleARN          string `json:"role_arn"`
+	SessionDuration  int    `json:"session_duration,omitempty"`
+	Region           string `json:"region,omitempty"`
+	GenerateOnWorker bool   `json:"generate_on_worker"`
+}
+
+// CloudIntegrationError represents an error from a cloud integration verification.
+type CloudIntegrationError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	At      string `json:"at"`
+}
+
+// CloudIntegration represents a cloud provider integration resource.
+type CloudIntegration struct {
+	ID              string                 `json:"id"`
+	OrganizationID  string                 `json:"organization_id"`
+	SpaceID         string                 `json:"space_id"`
+	Name            string                 `json:"name"`
+	Provider        string                 `json:"provider"`
+	Status          string                 `json:"status"`
+	AWS             *CloudAWSConfig        `json:"aws,omitempty"`
+	AutoAttachLabel string                 `json:"auto_attach_label,omitempty"`
+	CreatedAt       string                 `json:"created_at"`
+	UpdatedAt       string                 `json:"updated_at"`
+	CreatedBy       string                 `json:"created_by"`
+	LastVerifiedAt  *string                `json:"last_verified_at,omitempty"`
+	LastError       *CloudIntegrationError `json:"last_error,omitempty"`
+}
+
+// --- Cloud Attachment types ---
+
+// CloudAttachment represents a cloud integration attached to a stack.
+type CloudAttachment struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organization_id"`
+	IntegrationID  string `json:"integration_id"`
+	StackID        string `json:"stack_id"`
+	Read           bool   `json:"read"`
+	Write          bool   `json:"write"`
+	IsAutoAttached bool   `json:"is_auto_attached"`
+	CreatedAt      string `json:"created_at"`
+	CreatedBy      string `json:"created_by"`
+	ExternalID     string `json:"external_id"`
+}
+
+// AttachCloudIntegrationRequest is the request body for attaching a cloud integration to a stack.
+type AttachCloudIntegrationRequest struct {
+	StackID string `json:"stack_id"`
+	Read    bool   `json:"read"`
+	Write   bool   `json:"write"`
+}
+
 // --- Paginated response wrapper ---
 
 // PaginatedResponse wraps paginated list responses from the API.
