@@ -23,10 +23,11 @@ type stacksDataSourceModel struct {
 }
 
 type stacksListItemModel struct {
-	ID             types.String `tfsdk:"id"`
-	Name           types.String `tfsdk:"name"`
-	SpaceID        types.String `tfsdk:"space_id"`
-	OrganizationID types.String `tfsdk:"organization_id"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	SpaceID         types.String `tfsdk:"space_id"`
+	OrganizationID  types.String `tfsdk:"organization_id"`
+	StateManagement types.String `tfsdk:"state_management"`
 }
 
 var _ datasource.DataSource = &stacksDataSource{}
@@ -67,6 +68,10 @@ func (d *stacksDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 						},
 						"organization_id": schema.StringAttribute{
 							MarkdownDescription: "The organization ID that owns this stack.",
+							Computed:            true,
+						},
+						"state_management": schema.StringAttribute{
+							MarkdownDescription: "Who owns this stack's Terraform state.",
 							Computed:            true,
 						},
 					},
@@ -116,13 +121,20 @@ func (d *stacksDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	// Map results
 	data.Stacks = make([]stacksListItemModel, 0, len(stacks))
 	for i := range stacks {
-		data.Stacks = append(data.Stacks, stacksListItemModel{
-			ID:             types.StringValue(stacks[i].ID),
-			Name:           types.StringValue(stacks[i].Name),
-			SpaceID:        types.StringValue(stacks[i].SpaceID),
-			OrganizationID: types.StringValue(stacks[i].OrganizationID),
-		})
+		data.Stacks = append(data.Stacks, mapStackToListItem(&stacks[i]))
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// mapStackToListItem turns an API stack into a list item. Extracted from Read so
+// the mapping is testable on its own.
+func mapStackToListItem(stack *zenfraclient.Stack) stacksListItemModel {
+	return stacksListItemModel{
+		ID:              types.StringValue(stack.ID),
+		Name:            types.StringValue(stack.Name),
+		SpaceID:         types.StringValue(stack.SpaceID),
+		OrganizationID:  types.StringValue(stack.OrganizationID),
+		StateManagement: types.StringValue(zenfraclient.EffectiveStateMode(stack.StateManagement)),
+	}
 }

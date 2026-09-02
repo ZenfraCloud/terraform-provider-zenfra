@@ -24,6 +24,7 @@ type stackDataSourceModel struct {
 	OrganizationID  types.String        `tfsdk:"organization_id"`
 	WorkerPoolID    types.String        `tfsdk:"worker_pool_id"`
 	AllowPublicPool types.Bool          `tfsdk:"allow_public_pool"`
+	StateManagement types.String        `tfsdk:"state_management"`
 	IAC             *iacConfigModel     `tfsdk:"iac"`
 	Source          *stackSourceModel   `tfsdk:"source"`
 	Triggers        *stackTriggersModel `tfsdk:"triggers"`
@@ -101,6 +102,10 @@ func (d *stackDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			},
 			"allow_public_pool": schema.BoolAttribute{
 				MarkdownDescription: "Whether to allow execution on public worker pools.",
+				Computed:            true,
+			},
+			"state_management": schema.StringAttribute{
+				MarkdownDescription: "Who owns this stack's Terraform state.",
 				Computed:            true,
 			},
 			"iac": schema.SingleNestedAttribute{
@@ -239,26 +244,43 @@ func (d *stackDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	data.Name = types.StringValue(stack.Name)
-	data.SpaceID = types.StringValue(stack.SpaceID)
-	data.OrganizationID = types.StringValue(stack.OrganizationID)
+	data = mapStackToDataSource(stack)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// mapStackToDataSource turns an API stack into the data source model. Extracted
+// from Read so the mapping is testable on its own.
+func mapStackToDataSource(stack *zenfraclient.Stack) stackDataSourceModel {
+	data := stackDataSourceModel{
+		ID:              types.StringValue(stack.ID),
+		Name:            types.StringValue(stack.Name),
+		SpaceID:         types.StringValue(stack.SpaceID),
+		OrganizationID:  types.StringValue(stack.OrganizationID),
+		AllowPublicPool: types.BoolValue(stack.AllowPublicPool),
+		StateManagement: types.StringValue(zenfraclient.EffectiveStateMode(stack.StateManagement)),
+		IAC: &iacConfigModel{
+			Engine:  types.StringValue(stack.IAC.Engine),
+			Version: types.StringValue(stack.IAC.Version),
+		},
+		Source: &stackSourceModel{
+			Type: types.StringValue(stack.Source.Type),
+		},
+		Triggers: &stackTriggersModel{
+			OnPushEnabled: types.BoolValue(stack.Triggers.OnPush.Enabled),
+		},
+		CreatedBy: types.StringValue(stack.CreatedBy),
+		CreatedAt: types.StringValue(stack.CreatedAt.Format("2006-01-02T15:04:05Z07:00")),
+		UpdatedAt: types.StringValue(stack.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")),
+		UpdatedBy: types.StringValue(stack.UpdatedBy),
+	}
+
 	if stack.WorkerPoolID != nil {
 		data.WorkerPoolID = types.StringValue(*stack.WorkerPoolID)
 	} else {
 		data.WorkerPoolID = types.StringNull()
 	}
-	data.AllowPublicPool = types.BoolValue(stack.AllowPublicPool)
 
-	// Map IAC config
-	data.IAC = &iacConfigModel{
-		Engine:  types.StringValue(stack.IAC.Engine),
-		Version: types.StringValue(stack.IAC.Version),
-	}
-
-	// Map Source
-	data.Source = &stackSourceModel{
-		Type: types.StringValue(stack.Source.Type),
-	}
 	if stack.Source.RawGit != nil {
 		data.Source.RawGit = &stackSourceRawGitModel{
 			URL:     types.StringValue(stack.Source.RawGit.URL),
@@ -278,15 +300,5 @@ func (d *stackDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		}
 	}
 
-	// Map Triggers
-	data.Triggers = &stackTriggersModel{
-		OnPushEnabled: types.BoolValue(stack.Triggers.OnPush.Enabled),
-	}
-
-	data.CreatedBy = types.StringValue(stack.CreatedBy)
-	data.CreatedAt = types.StringValue(stack.CreatedAt.Format("2006-01-02T15:04:05Z07:00"))
-	data.UpdatedAt = types.StringValue(stack.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"))
-	data.UpdatedBy = types.StringValue(stack.UpdatedBy)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	return data
 }
