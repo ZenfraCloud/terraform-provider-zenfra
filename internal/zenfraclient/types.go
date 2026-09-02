@@ -108,18 +108,39 @@ type LastRunInfo struct {
 	FinishedAt  *string `json:"finished_at,omitempty"`
 }
 
+// StateMode values for StateManagement.Mode.
+const (
+	StateModeManaged  = "managed"
+	StateModeExternal = "external"
+)
+
+// StateManagement is who owns the stack's Terraform state. Create-only.
+type StateManagement struct {
+	Mode string `json:"mode"`
+}
+
+// EffectiveStateMode reports the mode a stack behaves as. A nil block means a
+// control plane older than this feature, which only ever managed state itself.
+func EffectiveStateMode(sm *StateManagement) string {
+	if sm == nil {
+		return StateModeManaged
+	}
+	return sm.Mode
+}
+
 // Stack represents an IaC stack resource.
 type Stack struct {
-	ID              string          `json:"id"`
-	OrganizationID  string          `json:"organization_id"`
-	SpaceID         string          `json:"space_id"`
-	Name            string          `json:"name"`
-	WorkerPoolID    *string         `json:"worker_pool_id,omitempty"`
-	AllowPublicPool bool            `json:"allow_public_pool"`
-	IAC             IACConfig       `json:"iac"`
-	Source          StackSource     `json:"source"`
-	Triggers        StackTriggers   `json:"triggers"`
-	PRComment       *StackPRComment `json:"pr_comment,omitempty"`
+	ID              string           `json:"id"`
+	OrganizationID  string           `json:"organization_id"`
+	SpaceID         string           `json:"space_id"`
+	Name            string           `json:"name"`
+	WorkerPoolID    *string          `json:"worker_pool_id,omitempty"`
+	AllowPublicPool bool             `json:"allow_public_pool"`
+	StateManagement *StateManagement `json:"state_management,omitempty"`
+	IAC             IACConfig        `json:"iac"`
+	Source          StackSource      `json:"source"`
+	Triggers        StackTriggers    `json:"triggers"`
+	PRComment       *StackPRComment  `json:"pr_comment,omitempty"`
 	// Hooks are the stack's own per-phase commands (ZenfraCloud/zenfra-cloud#737).
 	// Absent when the stack has none.
 	Hooks *Hooks `json:"hooks,omitempty"`
@@ -162,12 +183,13 @@ type StackPRCommentRequest struct {
 
 // CreateStackRequest is the request body for creating a stack.
 type CreateStackRequest struct {
-	SpaceID         string      `json:"space_id"`
-	Name            string      `json:"name"`
-	WorkerPoolID    *string     `json:"worker_pool_id,omitempty"`
-	AllowPublicPool bool        `json:"allow_public_pool"`
-	IAC             IACConfig   `json:"iac"`
-	Source          StackSource `json:"source"`
+	SpaceID         string           `json:"space_id"`
+	Name            string           `json:"name"`
+	WorkerPoolID    *string          `json:"worker_pool_id,omitempty"`
+	AllowPublicPool bool             `json:"allow_public_pool"`
+	StateManagement *StateManagement `json:"state_management,omitempty"`
+	IAC             IACConfig        `json:"iac"`
+	Source          StackSource      `json:"source"`
 	// Labels absent, null or [] all mean no labels.
 	Labels []string `json:"labels,omitempty"`
 	// PRComment absent: the API's default, private_or_internal_repos.
