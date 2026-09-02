@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/zenfra/terraform-provider-zenfra/internal/labelset"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
@@ -24,11 +25,12 @@ type stacksDataSourceModel struct {
 }
 
 type stacksListItemModel struct {
-	ID             types.String `tfsdk:"id"`
-	Name           types.String `tfsdk:"name"`
-	SpaceID        types.String `tfsdk:"space_id"`
-	OrganizationID types.String `tfsdk:"organization_id"`
-	Labels         types.Set    `tfsdk:"labels"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	SpaceID         types.String `tfsdk:"space_id"`
+	OrganizationID  types.String `tfsdk:"organization_id"`
+	StateManagement types.String `tfsdk:"state_management"`
+	Labels          types.Set    `tfsdk:"labels"`
 }
 
 var _ datasource.DataSource = &stacksDataSource{}
@@ -69,6 +71,10 @@ func (d *stacksDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 						},
 						"organization_id": schema.StringAttribute{
 							MarkdownDescription: "The organization ID that owns this stack.",
+							Computed:            true,
+						},
+						"state_management": schema.StringAttribute{
+							MarkdownDescription: "Who owns this stack's Terraform state.",
 							Computed:            true,
 						},
 						"labels": schema.SetAttribute{
@@ -123,16 +129,24 @@ func (d *stacksDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	// Map results
 	data.Stacks = make([]stacksListItemModel, 0, len(stacks))
 	for i := range stacks {
-		labels, diags := labelset.Computed(stacks[i].Labels)
+		item, diags := mapStackToListItem(&stacks[i])
 		resp.Diagnostics.Append(diags...)
-		data.Stacks = append(data.Stacks, stacksListItemModel{
-			ID:             types.StringValue(stacks[i].ID),
-			Name:           types.StringValue(stacks[i].Name),
-			SpaceID:        types.StringValue(stacks[i].SpaceID),
-			OrganizationID: types.StringValue(stacks[i].OrganizationID),
-			Labels:         labels,
-		})
+		data.Stacks = append(data.Stacks, item)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// mapStackToListItem turns an API stack into a list item. Extracted from Read so
+// the mapping is testable on its own.
+func mapStackToListItem(stack *zenfraclient.Stack) (stacksListItemModel, diag.Diagnostics) {
+	labels, diags := labelset.Computed(stack.Labels)
+	return stacksListItemModel{
+		ID:              types.StringValue(stack.ID),
+		Name:            types.StringValue(stack.Name),
+		SpaceID:         types.StringValue(stack.SpaceID),
+		OrganizationID:  types.StringValue(stack.OrganizationID),
+		StateManagement: types.StringValue(zenfraclient.EffectiveStateMode(stack.StateManagement)),
+		Labels:          labels,
+	}, diags
 }

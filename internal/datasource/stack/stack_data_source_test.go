@@ -1,5 +1,5 @@
-// ABOUTME: Unit tests for the zenfra_stack data source's labels.
-// ABOUTME: A data source's labels are never null: empty when the stack has none.
+// ABOUTME: Unit tests for the zenfra_stack and zenfra_stacks data sources: labels and state ownership.
+// ABOUTME: Labels are never null; a control plane older than state ownership reads as managed.
 package stack
 
 import (
@@ -65,5 +65,26 @@ func TestStackDataSource_Labels(t *testing.T) {
 				t.Errorf("labels = %v, want %d labels and never null", got.Labels, tt.wantCount)
 			}
 		})
+	}
+}
+
+func TestDataSource_StateManagement(t *testing.T) {
+	// A control plane older than the feature omits the block; it reads as managed.
+	if got, _ := mapStackToDataSource(&zenfraclient.Stack{ID: "s1"}); got.StateManagement.ValueString() != "managed" {
+		t.Errorf("nil block = %q, want managed", got.StateManagement.ValueString())
+	}
+	external := &zenfraclient.Stack{ID: "s1", StateManagement: &zenfraclient.StateManagement{Mode: "external"}}
+	if got, _ := mapStackToDataSource(external); got.StateManagement.ValueString() != "external" {
+		t.Error("an external stack must read as external")
+	}
+}
+
+func TestListItem_StateManagement(t *testing.T) {
+	if got, _ := mapStackToListItem(&zenfraclient.Stack{ID: "s1"}); got.StateManagement.ValueString() != "managed" {
+		t.Errorf("nil block = %q, want managed", got.StateManagement.ValueString())
+	}
+	external := &zenfraclient.Stack{ID: "s1", StateManagement: &zenfraclient.StateManagement{Mode: "external"}}
+	if got, _ := mapStackToListItem(external); got.StateManagement.ValueString() != "external" {
+		t.Error("an external stack must read as external in the list")
 	}
 }
