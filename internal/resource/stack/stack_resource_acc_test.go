@@ -19,11 +19,17 @@ import (
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
-// The public fixture the platform E2E uses, so an acceptance run needs no
-// private credentials beyond the Zenfra API token itself.
+// The public fixture the platform E2E uses, down to the branch, project root
+// and engine version, so an acceptance run needs no private credentials beyond
+// the Zenfra API token itself. The API only validates a raw-git ref and path
+// syntactically, so a fixture pointing at a branch that does not exist would
+// still create stacks and let these tests pass while nothing could be checked
+// out.
 const (
-	accSourceURL = "https://github.com/ZenfraCloud/zenfra-tf-min-stack-public.git"
-	accSourceRef = "simple"
+	accSourceURL  = "https://github.com/ZenfraCloud/zenfra-tf-min-stack-public"
+	accSourceRef  = "main"
+	accSourcePath = "simple"
+	accIACVersion = "1.14.2"
 )
 
 // testAccProtoV6ProviderFactories serves this provider in-process, so the tests
@@ -89,7 +95,7 @@ resource "zenfra_stack" "test" {
 %s
   iac = {
     engine  = "terraform"
-    version = "1.9.0"
+    version = %q
   }
 
   source = {
@@ -100,11 +106,11 @@ resource "zenfra_stack" "test" {
         type = "branch"
         name = %q
       }
-      path = "."
+      path = %q
     }
   }
 }
-`, os.Getenv("ZENFRA_ACC_SPACE_ID"), name, attr, accSourceURL, accSourceRef)
+`, os.Getenv("ZENFRA_ACC_SPACE_ID"), name, attr, accIACVersion, accSourceURL, accSourceRef, accSourcePath)
 }
 
 // captureID records the resource's ID so a later step can prove it changed.
