@@ -8,7 +8,7 @@ Manage your Zenfra infrastructure-as-code platform with Terraform.
 terraform {
   required_providers {
     zenfra = {
-      source = "registry.terraform.io/zenfra/zenfra"
+      source = "registry.terraform.io/ZenfraCloud/zenfra"
     }
   }
 }

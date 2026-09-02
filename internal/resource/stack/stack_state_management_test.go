@@ -168,10 +168,6 @@ func (f *fakeStackClient) SetStackSource(context.Context, string, zenfraclient.S
 	panic("SetStackSource: unexpected call")
 }
 
-func (f *fakeStackClient) SetStackTriggers(context.Context, string, zenfraclient.StackTriggers) error {
-	panic("SetStackTriggers: unexpected call")
-}
-
 // createdStack is what the API really returns: mapStackToState refuses a stack
 // with no source, so a bare &Stack{ID: "s1"} would not exercise state retention.
 func createdStack(mode string) *zenfraclient.Stack {
@@ -365,7 +361,6 @@ func stackCreateValues(t *testing.T, configured types.String) (tfsdk.Plan, tfsdk
 		StateManagement: types.StringUnknown(),
 		IAC:             iac,
 		Source:          source,
-		Triggers:        types.ObjectNull(TriggersModelAttrTypes),
 		CreatedAt:       types.StringUnknown(),
 		UpdatedAt:       types.StringUnknown(),
 		CreatedBy:       types.StringUnknown(),

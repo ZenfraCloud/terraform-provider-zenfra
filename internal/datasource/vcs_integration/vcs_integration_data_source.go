@@ -121,7 +121,7 @@ func (d *vcsIntegrationDataSource) Read(ctx context.Context, req datasource.Read
 	}
 
 	// Lookup by name: list all and find match.
-	integrations, err := d.client.ListVCSIntegrations(ctx)
+	integrations, err := d.client.ListVCSIntegrations(ctx, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list VCS integrations, got error: %s", err))
 		return

@@ -3,12 +3,12 @@
 page_title: "zenfra_stack Resource - zenfra"
 subcategory: ""
 description: |-
-  Manages a Zenfra stack with IaC configuration, source, and triggers.
+  Manages a Zenfra stack with IaC configuration and source.
 ---
 
 # zenfra_stack (Resource)
 
-Manages a Zenfra stack with IaC configuration, source, and triggers.
+Manages a Zenfra stack with IaC configuration and source.
 
 ## Example Usage
 
@@ -35,12 +35,6 @@ resource "zenfra_stack" "app" {
     }
   }
 
-  triggers = {
-    on_push = {
-      enabled = true
-      paths   = ["stacks/app/**"]
-    }
-  }
 }
 
 # Stack using a VCS integration
@@ -141,7 +135,6 @@ resource "zenfra_stack" "external_state" {
 
 - `allow_public_pool` (Boolean) Whether to allow using the public worker pool. Defaults to false.
 - `state_management` (String) Who owns this stack's Terraform state: "managed" (default, Zenfra stores it) or "external" (your own backend block in the source). Set at creation only; changing it is refused. Requires a worker advertising the external-state-v1 capability.
-- `triggers` (Attributes) Stack trigger configuration. (see [below for nested schema](#nestedatt--triggers))
 - `worker_pool_id` (String) Optional worker pool ID for executing runs.
 
 ### Read-Only
@@ -217,24 +210,6 @@ Required:
 
 - `name` (String) Reference name (branch name, tag name, or commit SHA).
 - `type` (String) Reference type: 'branch', 'tag', or 'commit'.
-
-
-
-
-<a id="nestedatt--triggers"></a>
-### Nested Schema for `triggers`
-
-Optional:
-
-- `on_push` (Attributes) Push-based trigger configuration. (see [below for nested schema](#nestedatt--triggers--on_push))
-
-<a id="nestedatt--triggers--on_push"></a>
-### Nested Schema for `triggers.on_push`
-
-Optional:
-
-- `enabled` (Boolean) Whether push triggers are enabled.
-- `paths` (List of String) Optional list of paths to watch for changes.
 
 ## Import
 

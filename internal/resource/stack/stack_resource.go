@@ -1,5 +1,5 @@
 // ABOUTME: Implements the zenfra_stack Terraform resource with full CRUD lifecycle.
-// ABOUTME: Manages stacks with nested source (raw_git/vcs), IAC config, and trigger configuration.
+// ABOUTME: Manages stacks with nested source (raw_git/vcs) and IAC config.
 package stack
 
 import (
@@ -38,7 +38,6 @@ type stackClient interface {
 	GetStack(ctx context.Context, id string) (*zenfraclient.Stack, error)
 	UpdateStack(ctx context.Context, id string, req zenfraclient.UpdateStackRequest) (*zenfraclient.Stack, error)
 	SetStackSource(ctx context.Context, id string, source zenfraclient.StackSource) error
-	SetStackTriggers(ctx context.Context, id string, triggers zenfraclient.StackTriggers) error
 	DeleteStack(ctx context.Context, id string) error
 }
 
@@ -55,7 +54,7 @@ func (r *StackResource) Metadata(_ context.Context, req resource.MetadataRequest
 // Schema defines the schema for the resource.
 func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Zenfra stack with IaC configuration, source, and triggers.",
+		Description: "Manages a Zenfra stack with IaC configuration and source.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier of the stack.",
@@ -131,6 +130,9 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					"type": schema.StringAttribute{
 						Description: "Source type: 'raw_git' or 'vcs'.",
 						Required:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.RequiresReplace(),
+						},
 					},
 					"raw_git": schema.SingleNestedAttribute{
 						Description: "Raw HTTPS git source configuration.",
@@ -193,30 +195,6 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 							"path": schema.StringAttribute{
 								Description: "Optional path within the repository.",
 								Optional:    true,
-							},
-						},
-					},
-				},
-			},
-			"triggers": schema.SingleNestedAttribute{
-				Description: "Stack trigger configuration.",
-				Optional:    true,
-				Computed:    true,
-				Attributes: map[string]schema.Attribute{
-					"on_push": schema.SingleNestedAttribute{
-						Description: "Push-based trigger configuration.",
-						Optional:    true,
-						Computed:    true,
-						Attributes: map[string]schema.Attribute{
-							"enabled": schema.BoolAttribute{
-								Description: "Whether push triggers are enabled.",
-								Optional:    true,
-								Computed:    true,
-							},
-							"paths": schema.ListAttribute{
-								Description: "Optional list of paths to watch for changes.",
-								Optional:    true,
-								ElementType: types.StringType,
 							},
 						},
 					},
@@ -344,10 +322,6 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	if r.setTriggersOnCreate(ctx, &plan, stack.ID, resp) {
-		return
-	}
-
 	// Map response to state
 	state, diags := mapStackToState(ctx, stack)
 	resp.Diagnostics.Append(diags...)
@@ -357,37 +331,6 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
-}
-
-// setTriggersOnCreate applies the planned triggers to a freshly created stack,
-// reporting whether Create must stop.
-func (r *StackResource) setTriggersOnCreate(
-	ctx context.Context, plan *StackModel, stackID string, resp *resource.CreateResponse,
-) (stop bool) {
-	if plan.Triggers.IsNull() || plan.Triggers.IsUnknown() {
-		return false
-	}
-
-	var triggersModel TriggersModel
-	resp.Diagnostics.Append(plan.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})...)
-	if resp.Diagnostics.HasError() {
-		return true
-	}
-
-	triggers, diags := buildTriggersFromModel(ctx, &triggersModel)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return true
-	}
-
-	if err := r.client.SetStackTriggers(ctx, stackID, *triggers); err != nil {
-		resp.Diagnostics.AddError(
-			"Error Setting Stack Triggers",
-			fmt.Sprintf("Could not set triggers for stack: %s", err.Error()),
-		)
-		return true
-	}
-	return false
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -427,7 +370,7 @@ func (r *StackResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 // Update updates the resource and sets the updated Terraform state on success.
 //
-//nolint:gocognit,gocyclo // Terraform CRUD with source, triggers, and base field updates
+//nolint:gocognit,gocyclo // Terraform CRUD with source and base field updates
 func (r *StackResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state StackModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -458,31 +401,6 @@ func (r *StackResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			resp.Diagnostics.AddError(
 				"Error Updating Stack Source",
 				fmt.Sprintf("Could not update stack source: %s", err.Error()),
-			)
-			return
-		}
-	}
-
-	// Check for trigger changes
-	if !plan.Triggers.IsUnknown() && !plan.Triggers.Equal(state.Triggers) {
-		var triggersModel TriggersModel
-		diags = plan.Triggers.As(ctx, &triggersModel, basetypes.ObjectAsOptions{})
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		triggers, diags := buildTriggersFromModel(ctx, &triggersModel)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		err := r.client.SetStackTriggers(ctx, state.ID.ValueString(), *triggers)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Updating Stack Triggers",
-				fmt.Sprintf("Could not update stack triggers: %s", err.Error()),
 			)
 			return
 		}
@@ -653,21 +571,6 @@ func mapStackToState(ctx context.Context, stack *zenfraclient.Stack) (*StackMode
 		diags.Append(d...)
 	}
 
-	// Map triggers
-	paths, d := types.ListValueFrom(ctx, types.StringType, stack.Triggers.OnPush.Paths)
-	diags.Append(d...)
-
-	onPushObj, d := types.ObjectValueFrom(ctx, OnPushModelAttrTypes, &OnPushModel{
-		Enabled: types.BoolValue(stack.Triggers.OnPush.Enabled),
-		Paths:   paths,
-	})
-	diags.Append(d...)
-
-	triggersObj, d := types.ObjectValueFrom(ctx, TriggersModelAttrTypes, &TriggersModel{
-		OnPush: onPushObj,
-	})
-	diags.Append(d...)
-
 	model := &StackModel{
 		ID:              types.StringValue(stack.ID),
 		OrganizationID:  types.StringValue(stack.OrganizationID),
@@ -677,7 +580,6 @@ func mapStackToState(ctx context.Context, stack *zenfraclient.Stack) (*StackMode
 		StateManagement: types.StringValue(zenfraclient.EffectiveStateMode(stack.StateManagement)),
 		IAC:             iacObj,
 		Source:          sourceObj,
-		Triggers:        triggersObj,
 		CreatedAt:       types.StringValue(stack.CreatedAt.Format("2006-01-02T15:04:05Z07:00")),
 		UpdatedAt:       types.StringValue(stack.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")),
 		CreatedBy:       types.StringValue(stack.CreatedBy),
@@ -752,34 +654,4 @@ func buildSourceFromModel(ctx context.Context, model *SourceModel) (*zenfraclien
 	}
 
 	return source, diags
-}
-
-// buildTriggersFromModel extracts triggers configuration from Terraform model.
-func buildTriggersFromModel(ctx context.Context, model *TriggersModel) (*zenfraclient.StackTriggers, diag.Diagnostics) {
-	var diags diag.Diagnostics
-
-	triggers := &zenfraclient.StackTriggers{}
-
-	if !model.OnPush.IsNull() {
-		var onPushModel OnPushModel
-		d := model.OnPush.As(ctx, &onPushModel, basetypes.ObjectAsOptions{})
-		diags.Append(d...)
-		if diags.HasError() {
-			return nil, diags
-		}
-
-		var paths []string
-		d = onPushModel.Paths.ElementsAs(ctx, &paths, false)
-		diags.Append(d...)
-		if diags.HasError() {
-			return nil, diags
-		}
-
-		triggers.OnPush = zenfraclient.StackTriggerOnPush{
-			Enabled: onPushModel.Enabled.ValueBool(),
-			Paths:   paths,
-		}
-	}
-
-	return triggers, diags
 }
