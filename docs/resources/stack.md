@@ -21,23 +21,22 @@ resource "zenfra_stack" "app" {
   # Bundles whose auto_attach_labels include one of these attach automatically.
   labels = ["production", "team.payments"]
 
-  iac {
+  iac = {
     engine  = "terraform"
     version = "1.9.0"
   }
 
-  source {
+  source = {
     type = "raw_git"
-    raw_git {
+    raw_git = {
       url = "https://github.com/example/infra.git"
-      ref {
+      ref = {
         type = "branch"
         name = "main"
       }
       path = "stacks/app"
     }
   }
-
 }
 
 # Stack using a VCS integration
@@ -46,18 +45,18 @@ resource "zenfra_stack" "network" {
   space_id       = zenfra_space.production.id
   worker_pool_id = zenfra_worker_pool.private.id
 
-  iac {
+  iac = {
     engine  = "opentofu"
     version = "1.8.0"
   }
 
-  source {
+  source = {
     type = "vcs"
-    vcs {
+    vcs = {
       provider       = "github"
       integration_id = data.zenfra_vcs_integration.github.id
       repository_id  = "example/network-infra"
-      ref {
+      ref = {
         type = "branch"
         name = "main"
       }
