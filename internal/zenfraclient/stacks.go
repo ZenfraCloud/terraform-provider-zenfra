@@ -52,13 +52,16 @@ func (c *Client) ListStacks(ctx context.Context, opts *ListStacksOptions) ([]Sta
 		}
 	}
 
+	// The API keys the array by resource name, not "items". An unmatched key
+	// decodes to nothing rather than to an error, so this silently returned an
+	// empty list before.
 	var resp struct {
-		Items []Stack `json:"items"`
+		Stacks []Stack `json:"stacks"`
 	}
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
 		return nil, fmt.Errorf("list stacks: %w", err)
 	}
-	return resp.Items, nil
+	return resp.Stacks, nil
 }
 
 // UpdateStack updates an existing stack.
