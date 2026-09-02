@@ -717,3 +717,39 @@ func TestContextCancellation(t *testing.T) {
 
 // Ensure unused imports don't cause issues.
 var _ = fmt.Sprintf
+
+// TestListStacks_Envelope pins the envelope the control plane actually sends.
+// The API writes the data under a key named after the resource, not "items"
+// (writePaginatedResponse(c, "stacks", ...)), and an unmatched key decodes to
+// nothing at all rather than to an error, so getting this wrong makes the
+// zenfra_stacks data source silently return an empty list.
+func TestListStacks_Envelope(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/stacks", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"stacks": [
+				{"id":"stack-1","name":"one","state_management":{"mode":"external"}},
+				{"id":"stack-2","name":"two"}
+			],
+			"pagination": {"total":2,"limit":50,"offset":0}
+		}`))
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	stacks, err := newTestClient(t, server).ListStacks(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListStacks: %v", err)
+	}
+	if len(stacks) != 2 {
+		t.Fatalf("got %d stacks, want 2: the response envelope was not decoded", len(stacks))
+	}
+	if EffectiveStateMode(stacks[0].StateManagement) != StateModeExternal {
+		t.Errorf("stack-1 = %q, want external", EffectiveStateMode(stacks[0].StateManagement))
+	}
+	if EffectiveStateMode(stacks[1].StateManagement) != StateModeManaged {
+		t.Errorf("stack-2 omits the block, so it must read as managed")
+	}
+}
