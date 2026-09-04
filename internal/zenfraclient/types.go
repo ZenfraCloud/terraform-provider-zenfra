@@ -101,33 +101,55 @@ type LastRunInfo struct {
 	FinishedAt  *string `json:"finished_at,omitempty"`
 }
 
+// StateMode values for StateManagement.Mode.
+const (
+	StateModeManaged  = "managed"
+	StateModeExternal = "external"
+)
+
+// StateManagement is who owns the stack's Terraform state. Create-only.
+type StateManagement struct {
+	Mode string `json:"mode"`
+}
+
+// EffectiveStateMode reports the mode a stack behaves as. A nil block means a
+// control plane older than this feature, which only ever managed state itself.
+func EffectiveStateMode(sm *StateManagement) string {
+	if sm == nil {
+		return StateModeManaged
+	}
+	return sm.Mode
+}
+
 // Stack represents an IaC stack resource.
 type Stack struct {
-	ID              string        `json:"id"`
-	OrganizationID  string        `json:"organization_id"`
-	SpaceID         string        `json:"space_id"`
-	Name            string        `json:"name"`
-	WorkerPoolID    *string       `json:"worker_pool_id,omitempty"`
-	AllowPublicPool bool          `json:"allow_public_pool"`
-	IAC             IACConfig     `json:"iac"`
-	Source          StackSource   `json:"source"`
-	Triggers        StackTriggers `json:"triggers"`
-	LastRun         *LastRunInfo  `json:"last_run,omitempty"`
-	CreatedBy       string        `json:"created_by"`
-	CreatedAt       time.Time     `json:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at"`
-	UpdatedBy       string        `json:"updated_by"`
-	DeletedAt       *time.Time    `json:"deleted_at,omitempty"`
+	ID              string           `json:"id"`
+	OrganizationID  string           `json:"organization_id"`
+	SpaceID         string           `json:"space_id"`
+	Name            string           `json:"name"`
+	WorkerPoolID    *string          `json:"worker_pool_id,omitempty"`
+	AllowPublicPool bool             `json:"allow_public_pool"`
+	StateManagement *StateManagement `json:"state_management,omitempty"`
+	IAC             IACConfig        `json:"iac"`
+	Source          StackSource      `json:"source"`
+	Triggers        StackTriggers    `json:"triggers"`
+	LastRun         *LastRunInfo     `json:"last_run,omitempty"`
+	CreatedBy       string           `json:"created_by"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
+	UpdatedBy       string           `json:"updated_by"`
+	DeletedAt       *time.Time       `json:"deleted_at,omitempty"`
 }
 
 // CreateStackRequest is the request body for creating a stack.
 type CreateStackRequest struct {
-	SpaceID         string      `json:"space_id"`
-	Name            string      `json:"name"`
-	WorkerPoolID    *string     `json:"worker_pool_id,omitempty"`
-	AllowPublicPool bool        `json:"allow_public_pool"`
-	IAC             IACConfig   `json:"iac"`
-	Source          StackSource `json:"source"`
+	SpaceID         string           `json:"space_id"`
+	Name            string           `json:"name"`
+	WorkerPoolID    *string          `json:"worker_pool_id,omitempty"`
+	AllowPublicPool bool             `json:"allow_public_pool"`
+	StateManagement *StateManagement `json:"state_management,omitempty"`
+	IAC             IACConfig        `json:"iac"`
+	Source          StackSource      `json:"source"`
 }
 
 // UpdateStackRequest is the request body for updating a stack.

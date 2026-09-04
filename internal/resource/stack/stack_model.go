@@ -15,6 +15,7 @@ type StackModel struct {
 	Name            types.String `tfsdk:"name"`
 	WorkerPoolID    types.String `tfsdk:"worker_pool_id"`
 	AllowPublicPool types.Bool   `tfsdk:"allow_public_pool"`
+	StateManagement types.String `tfsdk:"state_management"`
 	IAC             types.Object `tfsdk:"iac"`
 	Source          types.Object `tfsdk:"source"`
 	CreatedAt       types.String `tfsdk:"created_at"`

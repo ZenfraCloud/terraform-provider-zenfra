@@ -39,3 +39,4 @@ Read-Only:
 - `name` (String) The name of the stack.
 - `organization_id` (String) The organization ID that owns this stack.
 - `space_id` (String) The space ID containing this stack.
+- `state_management` (String) Who owns this stack's Terraform state.

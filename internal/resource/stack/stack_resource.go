@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
@@ -29,9 +30,20 @@ func NewStackResource() resource.Resource {
 	return &StackResource{}
 }
 
+// stackClient is every API call the resource makes, so Create's mismatch and
+// cleanup branches are testable without a live server. *zenfraclient.Client
+// satisfies it unchanged.
+type stackClient interface {
+	CreateStack(ctx context.Context, req zenfraclient.CreateStackRequest) (*zenfraclient.Stack, error)
+	GetStack(ctx context.Context, id string) (*zenfraclient.Stack, error)
+	UpdateStack(ctx context.Context, id string, req zenfraclient.UpdateStackRequest) (*zenfraclient.Stack, error)
+	SetStackSource(ctx context.Context, id string, source zenfraclient.StackSource) error
+	DeleteStack(ctx context.Context, id string) error
+}
+
 // StackResource is the resource implementation.
 type StackResource struct {
-	client *zenfraclient.Client
+	client stackClient
 }
 
 // Metadata returns the resource type name.
@@ -76,6 +88,25 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed:    true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"state_management": schema.StringAttribute{
+				Description: "Who owns this stack's Terraform state: \"managed\" (default, Zenfra " +
+					"stores it) or \"external\" (your own backend block in the source). Set at " +
+					"creation only; changing it is refused. Requires a worker advertising the " +
+					"external-state-v1 capability.",
+				Optional:   true,
+				Computed:   true,
+				Validators: []validator.String{stateManagementValidator{}},
+				PlanModifiers: []planmodifier.String{
+					// UseNonNullStateForUnknown, not UseStateForUnknown: state
+					// written before this attribute existed decodes as null, and
+					// UseStateForUnknown would copy that null into the plan, so an
+					// apply that reads back the real mode fails as an inconsistent
+					// result. Leaving it unknown lets the apply fill it in. Both
+					// are no-ops on create, where there is no prior state.
+					stringplanmodifier.UseNonNullStateForUnknown(),
+					stateManagementGuard{},
 				},
 			},
 			"iac": schema.SingleNestedAttribute{
@@ -244,6 +275,21 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	// The plan value is unknown for an omitted Optional+Computed attribute on
+	// create, so the configuration is the only honest source of intent.
+	var config StackModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	stateBlock, stateDiags := stateManagementForCreate(path.Root("state_management"), config.StateManagement)
+	resp.Diagnostics.Append(stateDiags...)
+	if resp.Diagnostics.HasError() {
+		return // refuse before the POST: nothing must be created
+	}
+	requested := requestedEffectiveMode(config.StateManagement)
+
 	// Build create request
 	createReq := zenfraclient.CreateStackRequest{
 		SpaceID:         plan.SpaceID.ValueString(),
@@ -253,7 +299,8 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 			Engine:  iacModel.Engine.ValueString(),
 			Version: iacModel.Version.ValueString(),
 		},
-		Source: *source,
+		Source:          *source,
+		StateManagement: stateBlock,
 	}
 
 	if !plan.WorkerPoolID.IsNull() {
@@ -268,6 +315,10 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 			"Error Creating Stack",
 			fmt.Sprintf("Could not create stack: %s", err.Error()),
 		)
+		return
+	}
+
+	if handleCreatedMode(ctx, r.client, stack, requested, resp) {
 		return
 	}
 
@@ -526,6 +577,7 @@ func mapStackToState(ctx context.Context, stack *zenfraclient.Stack) (*StackMode
 		SpaceID:         types.StringValue(stack.SpaceID),
 		Name:            types.StringValue(stack.Name),
 		AllowPublicPool: types.BoolValue(stack.AllowPublicPool),
+		StateManagement: types.StringValue(zenfraclient.EffectiveStateMode(stack.StateManagement)),
 		IAC:             iacObj,
 		Source:          sourceObj,
 		CreatedAt:       types.StringValue(stack.CreatedAt.Format("2006-01-02T15:04:05Z07:00")),
