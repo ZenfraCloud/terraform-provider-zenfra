@@ -777,3 +777,24 @@ func TestContextCancellation(t *testing.T) {
 
 // Ensure unused imports don't cause issues.
 var _ = fmt.Sprintf
+
+func TestGetStack_DecodesBothTriggerSwitches(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"s1","triggers":{"on_push":{"enabled":false,"paths":["modules/**"]},"on_pull_request":{"enabled":true}}}`))
+	}))
+	defer server.Close()
+
+	stack, err := newTestClient(t, server).GetStack(context.Background(), "s1")
+	if err != nil {
+		t.Fatalf("GetStack: %v", err)
+	}
+	if stack.Triggers.OnPush.Enabled || len(stack.Triggers.OnPush.Paths) != 1 {
+		t.Errorf("on_push = %+v, want disabled with one path", stack.Triggers.OnPush)
+	}
+	if !stack.Triggers.OnPullRequest.Enabled {
+		t.Errorf("on_pull_request.enabled = false, want true")
+	}
+}

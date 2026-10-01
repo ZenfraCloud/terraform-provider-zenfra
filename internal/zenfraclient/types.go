@@ -86,9 +86,16 @@ type StackTriggerOnPush struct {
 	Paths   []string `json:"paths,omitempty"`
 }
 
+// StackTriggerOnPullRequest configures pull-request planning. Paths are shared
+// with OnPush: one path list scopes the stack for both events.
+type StackTriggerOnPullRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
 // StackTriggers configures what events can automatically create runs.
 type StackTriggers struct {
-	OnPush StackTriggerOnPush `json:"on_push"`
+	OnPush        StackTriggerOnPush        `json:"on_push"`
+	OnPullRequest StackTriggerOnPullRequest `json:"on_pull_request"`
 }
 
 // LastRunInfo contains summary information about the most recent run.
