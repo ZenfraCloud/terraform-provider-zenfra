@@ -110,21 +110,35 @@ type LastRunInfo struct {
 
 // Stack represents an IaC stack resource.
 type Stack struct {
-	ID              string        `json:"id"`
-	OrganizationID  string        `json:"organization_id"`
-	SpaceID         string        `json:"space_id"`
-	Name            string        `json:"name"`
-	WorkerPoolID    *string       `json:"worker_pool_id,omitempty"`
-	AllowPublicPool bool          `json:"allow_public_pool"`
-	IAC             IACConfig     `json:"iac"`
-	Source          StackSource   `json:"source"`
-	Triggers        StackTriggers `json:"triggers"`
-	LastRun         *LastRunInfo  `json:"last_run,omitempty"`
-	CreatedBy       string        `json:"created_by"`
-	CreatedAt       time.Time     `json:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at"`
-	UpdatedBy       string        `json:"updated_by"`
-	DeletedAt       *time.Time    `json:"deleted_at,omitempty"`
+	ID              string          `json:"id"`
+	OrganizationID  string          `json:"organization_id"`
+	SpaceID         string          `json:"space_id"`
+	Name            string          `json:"name"`
+	WorkerPoolID    *string         `json:"worker_pool_id,omitempty"`
+	AllowPublicPool bool            `json:"allow_public_pool"`
+	IAC             IACConfig       `json:"iac"`
+	Source          StackSource     `json:"source"`
+	Triggers        StackTriggers   `json:"triggers"`
+	PRComment       *StackPRComment `json:"pr_comment,omitempty"`
+	LastRun         *LastRunInfo    `json:"last_run,omitempty"`
+	CreatedBy       string          `json:"created_by"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	UpdatedBy       string          `json:"updated_by"`
+	DeletedAt       *time.Time      `json:"deleted_at,omitempty"`
+}
+
+// StackPRComment is the stack's pull request comment setting
+// (ZenfraCloud/zenfra-cloud#833): whether plan comments list resource
+// addresses, "off", "private_or_internal_repos" or "always".
+type StackPRComment struct {
+	ResourceAddresses string `json:"resource_addresses"`
+}
+
+// StackPRCommentRequest carries the setting in a request: an absent leaf
+// leaves the stored value unchanged.
+type StackPRCommentRequest struct {
+	ResourceAddresses *string `json:"resource_addresses,omitempty"`
 }
 
 // CreateStackRequest is the request body for creating a stack.
@@ -135,15 +149,18 @@ type CreateStackRequest struct {
 	AllowPublicPool bool        `json:"allow_public_pool"`
 	IAC             IACConfig   `json:"iac"`
 	Source          StackSource `json:"source"`
+	// PRComment absent: the API's default, private_or_internal_repos.
+	PRComment *StackPRCommentRequest `json:"pr_comment,omitempty"`
 }
 
 // UpdateStackRequest is the request body for updating a stack.
 type UpdateStackRequest struct {
-	Name            *string      `json:"name,omitempty"`
-	WorkerPoolID    *string      `json:"worker_pool_id,omitempty"`
-	AllowPublicPool *bool        `json:"allow_public_pool,omitempty"`
-	IAC             *IACConfig   `json:"iac,omitempty"`
-	Source          *StackSource `json:"source,omitempty"`
+	Name            *string                `json:"name,omitempty"`
+	WorkerPoolID    *string                `json:"worker_pool_id,omitempty"`
+	AllowPublicPool *bool                  `json:"allow_public_pool,omitempty"`
+	IAC             *IACConfig             `json:"iac,omitempty"`
+	Source          *StackSource           `json:"source,omitempty"`
+	PRComment       *StackPRCommentRequest `json:"pr_comment,omitempty"`
 }
 
 // StackVariable represents a single environment variable on a stack.

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -796,5 +797,44 @@ func TestGetStack_DecodesBothTriggerSwitches(t *testing.T) {
 	}
 	if !stack.Triggers.OnPullRequest.Enabled {
 		t.Errorf("on_pull_request.enabled = false, want true")
+	}
+}
+
+func TestGetStack_DecodesThePRCommentSetting(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"s1","pr_comment":{"resource_addresses":"private_or_internal_repos"}}`))
+	}))
+	defer server.Close()
+
+	stack, err := newTestClient(t, server).GetStack(context.Background(), "s1")
+	if err != nil {
+		t.Fatalf("GetStack: %v", err)
+	}
+	if stack.PRComment == nil || stack.PRComment.ResourceAddresses != "private_or_internal_repos" {
+		t.Errorf("pr_comment = %+v, want private_or_internal_repos", stack.PRComment)
+	}
+}
+
+func TestUpdateStackRequest_OmitsAnUnsetPRComment(t *testing.T) {
+	t.Parallel()
+
+	name := "renamed"
+	raw, err := json.Marshal(UpdateStackRequest{Name: &name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "pr_comment") {
+		t.Errorf("an unset setting must be absent (absent leaves it unchanged): %s", raw)
+	}
+	off := "off"
+	raw, err = json.Marshal(UpdateStackRequest{PRComment: &StackPRCommentRequest{ResourceAddresses: &off}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"pr_comment":{"resource_addresses":"off"}`) {
+		t.Errorf("got %s", raw)
 	}
 }
