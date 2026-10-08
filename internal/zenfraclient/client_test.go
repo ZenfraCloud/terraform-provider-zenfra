@@ -440,6 +440,7 @@ func TestCRUD_WorkerPool(t *testing.T) {
 	mux.HandleFunc("POST /api/v1/worker-pools", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
+		// #nosec G101 G117 -- test fixture: a placeholder key in a fake API response
 		_ = json.NewEncoder(w).Encode(CreateWorkerPoolResponse{
 			Pool:   WorkerPool{ID: "pool-1", Name: "my-pool"},
 			APIKey: "secret-api-key-only-shown-once",
