@@ -278,6 +278,8 @@ func (r *BundleResource) writeContentThenSelector(
 	if diags.HasError() {
 		return nil
 	}
+	// A new bundle is at content_version 0, which the API cannot fence: this
+	// first write is unfenced (see UpdateBundleContentRequest).
 	contentReq.ExpectedVersion = bundle.ContentVersion
 	contentResp, err := r.client.UpdateBundleContent(ctx, bundle.ID, contentReq)
 	if err != nil {
@@ -438,6 +440,8 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 		if resp.Diagnostics.HasError() {
 			return
 		}
+		// Fenced on the version Terraform last saw; unfenced only while the
+		// bundle's content was never written (0, see UpdateBundleContentRequest).
 		contentReq.ExpectedVersion = state.ContentVersion.ValueInt64()
 
 		contentResp, err := r.client.UpdateBundleContent(ctx, state.ID.ValueString(), contentReq)

@@ -313,9 +313,10 @@ type UpdateBundleRequest struct {
 }
 
 // BundleContent is the body of a content write. The write replaces the
-// environment variables and mounted files (and the API's secret_access list,
-// which this provider does not manage). Hooks nil leaves the stored hooks
-// unchanged; &Hooks{} clears them.
+// environment variables and mounted files. Hooks nil leaves the stored hooks
+// unchanged; &Hooks{} clears them. The API also accepts a secret_access list,
+// which it stores but never reads and never returns; this provider does not
+// send it, so a content write stores it empty.
 type BundleContent struct {
 	EnvironmentVariables []EnvVariable `json:"environment_variables"`
 	MountedFiles         []MountedFile `json:"mounted_files"`
@@ -323,7 +324,16 @@ type BundleContent struct {
 }
 
 // UpdateBundleContentRequest is the request body for updating bundle content.
-// ExpectedVersion 0 is omitted, which the API reads as "use the current version".
+//
+// ExpectedVersion fences the write on content_version: a non-zero value must
+// match or the API answers 409 version_conflict. 0 is omitted, and the API
+// reads 0 (or absent) as "skip the version check", fencing the write only
+// when it keeps the stored hooks (a content without a hooks member). The
+// provider always sends hooks, so a write at 0 is unfenced. That happens on
+// the first content write to a bundle, whose content_version starts at 0:
+// the one Create makes, and an update to a bundle whose content was never
+// written. Every later write carries the content_version from state and is
+// fenced. The API offers no way to fence at 0 over HTTP.
 type UpdateBundleContentRequest struct {
 	Content         any   `json:"content"`
 	ExpectedVersion int64 `json:"expected_version,omitempty"`
