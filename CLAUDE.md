@@ -88,7 +88,7 @@ All files must start with 2-line `// ABOUTME:` comments describing the file's pu
 ### Testing
 - Unit tests alongside implementation files
 - Race detector always enabled (`-race`)
-- Acceptance tests gated behind `TF_ACC=1`
+- Acceptance tests (`*_acc_test.go`) gated behind `TF_ACC=1`; they also need `ZENFRA_API_ENDPOINT`, `ZENFRA_API_TOKEN` and `ZENFRA_ACC_SPACE_ID`, and fail (not skip) without them. Shared harness: `internal/acctest`
 
 ### Linting
 Uses `.golangci.yml` with: govet, errcheck, staticcheck, gosec, gocyclo (max 15), gocognit (max 20), goconst, gocritic, errorlint. Test files exempt from complexity checks.
