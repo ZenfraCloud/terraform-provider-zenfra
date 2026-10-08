@@ -18,6 +18,9 @@ resource "zenfra_stack" "app" {
   name     = "Application Stack"
   space_id = zenfra_space.production.id
 
+  # Bundles whose auto_attach_labels include one of these attach automatically.
+  labels = ["production", "team.payments"]
+
   iac {
     engine  = "terraform"
     version = "1.9.0"
@@ -76,6 +79,7 @@ resource "zenfra_stack" "network" {
 ### Optional
 
 - `allow_public_pool` (Boolean) Whether to allow using the public worker pool. Defaults to false.
+- `labels` (Set of String) Labels on the stack. A configuration bundle whose auto_attach_labels share a label with the stack attaches to it automatically. Lowercase a-z, 0-9, '.', '_' and '-', 1-63 characters starting with a letter or digit, at most 20. Terraform owns the whole set: omitting the attribute means no labels, and labels added outside Terraform are removed on the next apply.
 - `worker_pool_id` (String) Optional worker pool ID for executing runs.
 
 ### Read-Only

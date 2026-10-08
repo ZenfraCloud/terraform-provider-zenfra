@@ -31,6 +31,7 @@ data "zenfra_stack" "app" {
 - `created_at` (String) RFC3339 timestamp when the stack was created.
 - `created_by` (String) The user ID who created this stack.
 - `iac` (Attributes) Infrastructure as Code engine configuration. (see [below for nested schema](#nestedatt--iac))
+- `labels` (Set of String) Labels on the stack. Configuration bundles whose `auto_attach_labels` share a label with the stack attach to it automatically. Empty when the stack has none.
 - `name` (String) The name of the stack.
 - `organization_id` (String) The organization ID that owns this stack.
 - `source` (Attributes) Source code configuration for the stack. (see [below for nested schema](#nestedatt--source))

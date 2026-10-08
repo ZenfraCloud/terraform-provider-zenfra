@@ -87,7 +87,9 @@ func (r *BundleResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 			"auto_attach_labels": schema.SetAttribute{
 				Description: "Stack labels this bundle attaches itself to: every stack carrying at least one of them gets the " +
-					"bundle on its runs without a zenfra_bundle_attachment. Lowercase a-z, 0-9, '.', '_' and '-', 1-63 " +
+					"bundle on its runs without a zenfra_bundle_attachment, provided the bundle could be attached to it by " +
+					"hand (the stack's own space, or an ancestor space it inherits bundles from). Changes apply to runs " +
+					"created afterwards. Lowercase a-z, 0-9, '.', '_' and '-', 1-63 " +
 					"characters starting with a letter or digit, at most 20. A selector, not content: changing it does not " +
 					"change content_version. Terraform owns the whole set: omitting the attribute means none.",
 				Optional:    true,

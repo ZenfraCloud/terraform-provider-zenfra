@@ -36,6 +36,7 @@ data "zenfra_stacks" "production" {
 Read-Only:
 
 - `id` (String) The unique identifier of the stack.
+- `labels` (Set of String) Labels on the stack. Empty when the stack has none.
 - `name` (String) The name of the stack.
 - `organization_id` (String) The organization ID that owns this stack.
 - `space_id` (String) The space ID containing this stack.

@@ -24,3 +24,22 @@ resource "zenfra_configuration_bundle" "aws_credentials" {
     secret      = false
   }
 }
+
+# A bundle that attaches itself, by label, to every stack labelled
+# "production", and runs hooks around plan and apply on those stacks.
+resource "zenfra_configuration_bundle" "production_guardrails" {
+  name     = "Production Guardrails"
+  slug     = "production-guardrails"
+  space_id = zenfra_space.production.id
+
+  auto_attach_labels = ["production"]
+
+  hooks = {
+    before_plan = [
+      "terraform fmt -check -recursive",
+    ]
+    after_apply = [
+      "./scripts/notify.sh \"$ZENFRA_STACK_ID\"",
+    ]
+  }
+}

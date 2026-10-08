@@ -3,12 +3,12 @@
 page_title: "zenfra_bundle_attachment Resource - zenfra"
 subcategory: ""
 description: |-
-  Attaches a configuration bundle to a stack.
+  Attaches a configuration bundle to a stack explicitly. A bundle can also reach a stack by label (its auto_attach_labels); that needs no attachment resource, and this resource only manages the explicit one.
 ---
 
 # zenfra_bundle_attachment (Resource)
 
-Attaches a configuration bundle to a stack.
+Attaches a configuration bundle to a stack explicitly. A bundle can also reach a stack by label (its auto_attach_labels); that needs no attachment resource, and this resource only manages the explicit one.
 
 ## Example Usage
 
@@ -16,6 +16,10 @@ Attaches a configuration bundle to a stack.
 resource "zenfra_bundle_attachment" "app_aws" {
   stack_id  = zenfra_stack.app.id
   bundle_id = zenfra_configuration_bundle.aws_credentials.id
+
+  # Explicit attachments apply in ascending priority; the higher one wins a
+  # conflicting environment variable or file.
+  priority = 10
 }
 ```
 
@@ -26,6 +30,10 @@ resource "zenfra_bundle_attachment" "app_aws" {
 
 - `bundle_id` (String) The bundle to attach.
 - `stack_id` (String) The stack to attach the bundle to.
+
+### Optional
+
+- `priority` (Number) Order in which the stack's explicitly attached bundles apply: ascending, ties by bundle ID, so on a conflicting environment variable or file the higher priority wins. Zero or greater; a new attachment starts at 0. Changed in place. Omitting it leaves the current priority unmanaged.
 
 ### Read-Only
 
