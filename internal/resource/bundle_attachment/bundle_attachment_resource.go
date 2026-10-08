@@ -108,7 +108,7 @@ func (r *BundleAttachmentResource) Read(ctx context.Context, req resource.ReadRe
 	stackID := state.StackID.ValueString()
 	bundleID := state.BundleID.ValueString()
 
-	attachments, err := r.client.ListStackBundles(ctx, stackID)
+	list, err := r.client.ListStackBundles(ctx, stackID)
 	if err != nil {
 		if zenfraclient.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -118,15 +118,7 @@ func (r *BundleAttachmentResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	found := false
-	for _, att := range attachments {
-		if att.BundleID == bundleID {
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	if list.ExplicitAttachment(bundleID) == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}

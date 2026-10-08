@@ -120,12 +120,31 @@ type Stack struct {
 	Source          StackSource     `json:"source"`
 	Triggers        StackTriggers   `json:"triggers"`
 	PRComment       *StackPRComment `json:"pr_comment,omitempty"`
-	LastRun         *LastRunInfo    `json:"last_run,omitempty"`
-	CreatedBy       string          `json:"created_by"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
-	UpdatedBy       string          `json:"updated_by"`
-	DeletedAt       *time.Time      `json:"deleted_at,omitempty"`
+	// Hooks are the stack's own per-phase commands (ZenfraCloud/zenfra-cloud#737).
+	// Absent when the stack has none.
+	Hooks *Hooks `json:"hooks,omitempty"`
+	// Labels select the bundles that auto-attach to the stack
+	// (ZenfraCloud/zenfra-cloud#736). The API answers [] when there are none.
+	Labels    []string     `json:"labels"`
+	LastRun   *LastRunInfo `json:"last_run,omitempty"`
+	CreatedBy string       `json:"created_by"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
+	UpdatedBy string       `json:"updated_by"`
+	DeletedAt *time.Time   `json:"deleted_at,omitempty"`
+}
+
+// Hooks holds ordered shell commands per phase, the shape the API uses for
+// both stack hooks and bundle hooks. The API drops empty phases, so every
+// field is omitempty and Hooks{} marshals as {}, which the API reads as
+// "no commands": on a bundle content write it clears the stored hooks.
+type Hooks struct {
+	BeforeInit  []string `json:"before_init,omitempty"`
+	AfterInit   []string `json:"after_init,omitempty"`
+	BeforePlan  []string `json:"before_plan,omitempty"`
+	AfterPlan   []string `json:"after_plan,omitempty"`
+	BeforeApply []string `json:"before_apply,omitempty"`
+	AfterApply  []string `json:"after_apply,omitempty"`
 }
 
 // StackPRComment is the stack's pull request comment setting
@@ -149,18 +168,24 @@ type CreateStackRequest struct {
 	AllowPublicPool bool        `json:"allow_public_pool"`
 	IAC             IACConfig   `json:"iac"`
 	Source          StackSource `json:"source"`
+	// Labels absent, null or [] all mean no labels.
+	Labels []string `json:"labels,omitempty"`
 	// PRComment absent: the API's default, private_or_internal_repos.
 	PRComment *StackPRCommentRequest `json:"pr_comment,omitempty"`
 }
 
 // UpdateStackRequest is the request body for updating a stack.
 type UpdateStackRequest struct {
-	Name            *string                `json:"name,omitempty"`
-	WorkerPoolID    *string                `json:"worker_pool_id,omitempty"`
-	AllowPublicPool *bool                  `json:"allow_public_pool,omitempty"`
-	IAC             *IACConfig             `json:"iac,omitempty"`
-	Source          *StackSource           `json:"source,omitempty"`
-	PRComment       *StackPRCommentRequest `json:"pr_comment,omitempty"`
+	Name            *string      `json:"name,omitempty"`
+	WorkerPoolID    *string      `json:"worker_pool_id,omitempty"`
+	AllowPublicPool *bool        `json:"allow_public_pool,omitempty"`
+	IAC             *IACConfig   `json:"iac,omitempty"`
+	Source          *StackSource `json:"source,omitempty"`
+	// Labels: nil leaves the stored labels unchanged; a pointer to an empty,
+	// non-nil slice sends [] and clears them. A pointer to a nil slice would
+	// marshal as null and leave them unchanged, so never send one to clear.
+	Labels    *[]string              `json:"labels,omitempty"`
+	PRComment *StackPRCommentRequest `json:"pr_comment,omitempty"`
 }
 
 // StackVariable represents a single environment variable on a stack.
@@ -242,40 +267,63 @@ type MountedFile struct {
 
 // Bundle represents a configuration bundle resource.
 type Bundle struct {
-	ID                   string        `json:"id"`
-	OrganizationID       string        `json:"organization_id"`
-	SpaceID              string        `json:"space_id"`
-	Name                 string        `json:"name"`
-	Slug                 string        `json:"slug"`
-	Description          string        `json:"description"`
-	Labels               []string      `json:"labels"`
+	ID             string   `json:"id"`
+	OrganizationID string   `json:"organization_id"`
+	SpaceID        string   `json:"space_id"`
+	Name           string   `json:"name"`
+	Slug           string   `json:"slug"`
+	Description    string   `json:"description"`
+	Labels         []string `json:"labels"`
+	// AutoAttachLabels attach the bundle to every stack carrying one of them
+	// (ZenfraCloud/zenfra-cloud#736). Metadata, not content. [] when none.
+	AutoAttachLabels     []string      `json:"auto_attach_labels"`
 	ContentVersion       int64         `json:"content_version"`
 	AttachedStacksCount  int64         `json:"attached_stacks_count"`
+	HMACFingerprint      string        `json:"hmac_fingerprint,omitempty"`
+	HMACKeyVersion       int           `json:"hmac_key_version,omitempty"`
 	EnvironmentVariables []EnvVariable `json:"environment_variables"`
 	MountedFiles         []MountedFile `json:"mounted_files"`
-	CreatedAt            time.Time     `json:"created_at"`
-	UpdatedAt            time.Time     `json:"updated_at"`
-	CreatedBy            string        `json:"created_by"`
-	UpdatedBy            string        `json:"updated_by"`
+	// Hooks are content (ZenfraCloud/zenfra-cloud#736). Absent when none.
+	Hooks     *Hooks    `json:"hooks,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedBy string    `json:"created_by"`
+	UpdatedBy string    `json:"updated_by"`
 }
 
 // CreateBundleRequest is the request body for creating a bundle.
 type CreateBundleRequest struct {
-	Name        string   `json:"name"`
-	Slug        string   `json:"slug"`
-	Description string   `json:"description,omitempty"`
-	Labels      []string `json:"labels,omitempty"`
-	SpaceID     string   `json:"space_id,omitempty"`
+	Name             string   `json:"name"`
+	Slug             string   `json:"slug"`
+	Description      string   `json:"description,omitempty"`
+	Labels           []string `json:"labels,omitempty"`
+	SpaceID          string   `json:"space_id,omitempty"`
+	AutoAttachLabels []string `json:"auto_attach_labels,omitempty"`
 }
 
 // UpdateBundleRequest is the request body for updating bundle metadata.
+// A nil pointer leaves the field unchanged. For Labels and AutoAttachLabels a
+// pointer to an empty, non-nil slice sends [] and clears them; a pointer to a
+// nil slice marshals as null, which the API reads as "unchanged".
 type UpdateBundleRequest struct {
-	Description *string   `json:"description,omitempty"`
-	Labels      *[]string `json:"labels,omitempty"`
-	SpaceID     *string   `json:"space_id,omitempty"`
+	Description      *string   `json:"description,omitempty"`
+	Labels           *[]string `json:"labels,omitempty"`
+	SpaceID          *string   `json:"space_id,omitempty"`
+	AutoAttachLabels *[]string `json:"auto_attach_labels,omitempty"`
+}
+
+// BundleContent is the body of a content write. The write replaces the
+// environment variables and mounted files (and the API's secret_access list,
+// which this provider does not manage). Hooks nil leaves the stored hooks
+// unchanged; &Hooks{} clears them.
+type BundleContent struct {
+	EnvironmentVariables []EnvVariable `json:"environment_variables"`
+	MountedFiles         []MountedFile `json:"mounted_files"`
+	Hooks                *Hooks        `json:"hooks,omitempty"`
 }
 
 // UpdateBundleContentRequest is the request body for updating bundle content.
+// ExpectedVersion 0 is omitted, which the API reads as "use the current version".
 type UpdateBundleContentRequest struct {
 	Content         any   `json:"content"`
 	ExpectedVersion int64 `json:"expected_version,omitempty"`
@@ -289,15 +337,28 @@ type UpdateBundleContentResponse struct {
 
 // --- Bundle Attachment types ---
 
-// BundleAttachment represents a bundle attached to a stack.
+// Attachment sources (ZenfraCloud/zenfra-cloud#736).
+const (
+	// AttachmentSourceExplicit is a persisted attachment, the only kind the
+	// attachment endpoints can detach or reprioritise.
+	AttachmentSourceExplicit = "explicit"
+	// AttachmentSourceAuto is a bundle that reaches the stack by label.
+	AttachmentSourceAuto = "auto"
+)
+
+// BundleAttachment is one bundle a run of the stack would attach. An explicit
+// row carries ID, Priority, AttachedAt and AttachedBy; an auto row has none of
+// them and carries BundleSlug instead, which orders it.
 type BundleAttachment struct {
-	ID             string    `json:"id"`
-	OrganizationID string    `json:"organization_id"`
-	StackID        string    `json:"stack_id"`
-	BundleID       string    `json:"bundle_id"`
-	Priority       int       `json:"priority"`
-	AttachedAt     time.Time `json:"attached_at"`
-	AttachedBy     string    `json:"attached_by"`
+	ID             string     `json:"id,omitempty"`
+	OrganizationID string     `json:"organization_id"`
+	StackID        string     `json:"stack_id"`
+	BundleID       string     `json:"bundle_id"`
+	Source         string     `json:"source"`
+	BundleSlug     string     `json:"bundle_slug,omitempty"`
+	Priority       *int       `json:"priority,omitempty"`
+	AttachedAt     *time.Time `json:"attached_at,omitempty"`
+	AttachedBy     string     `json:"attached_by,omitempty"`
 }
 
 // AttachBundleRequest is the request body for attaching a bundle to a stack.
@@ -305,10 +366,21 @@ type AttachBundleRequest struct {
 	BundleID string `json:"bundle_id"`
 }
 
-// ListAttachmentsResponse is the response for listing stack bundle attachments.
+// UpdateBundlePriorityRequest is the request body for
+// PATCH /stacks/:stack_id/bundles/:bundle_id. Bundles apply in ascending
+// priority, so on a conflicting env var or file the higher value wins.
+type UpdateBundlePriorityRequest struct {
+	Priority int `json:"priority"`
+}
+
+// ListAttachmentsResponse is the response for GET /stacks/:id/bundles.
+// Attachments and Total are the explicit attachments only; AutoAttached are
+// the bundles that attach by label and AutoMatchCount is their number.
 type ListAttachmentsResponse struct {
-	Attachments []BundleAttachment `json:"attachments"`
-	Total       int                `json:"total"`
+	Attachments    []BundleAttachment `json:"attachments"`
+	Total          int                `json:"total"`
+	AutoAttached   []BundleAttachment `json:"auto_attached"`
+	AutoMatchCount int                `json:"auto_match_count"`
 }
 
 // --- API Token types ---

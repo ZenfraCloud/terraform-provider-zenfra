@@ -199,10 +199,12 @@ func checkResponse(resp *http.Response) error {
 	// Try to parse error message from response body.
 	var errBody struct {
 		Error   string            `json:"error"`
+		Code    string            `json:"code"`
 		Message string            `json:"message"`
 		Fields  map[string]string `json:"fields,omitempty"`
 	}
 	if json.Unmarshal(bodyBytes, &errBody) == nil {
+		apiErr.Code = errBody.Code
 		if errBody.Message != "" {
 			apiErr.Message = errBody.Message
 		} else if errBody.Error != "" {

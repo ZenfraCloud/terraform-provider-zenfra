@@ -393,9 +393,9 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 			updateReq.SpaceID = &spaceID
 		}
 
-		var err error
-		bundle, err = r.client.UpdateBundle(ctx, state.ID.ValueString(), updateReq)
-		if err != nil {
+		// The API answers a metadata update with a status message, not the
+		// bundle; the bundle is read back below.
+		if err := r.client.UpdateBundle(ctx, state.ID.ValueString(), updateReq); err != nil {
 			resp.Diagnostics.AddError("Error Updating Bundle", fmt.Sprintf("Could not update bundle: %s", err))
 			return
 		}

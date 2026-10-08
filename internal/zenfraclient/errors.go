@@ -12,8 +12,16 @@ import (
 type APIError struct {
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
-	RequestID  string `json:"request_id,omitempty"`
+	// Code is the machine-readable error code from the body's "code" member
+	// (for example "auto_attached" or "version_conflict"), when present.
+	Code      string `json:"code,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
 }
+
+// CodeAutoAttached is the 409 code the API answers a detach or priority
+// edit with when the bundle reaches the stack only by label
+// (ZenfraCloud/zenfra-cloud#736).
+const CodeAutoAttached = "auto_attached"
 
 // Error implements the error interface.
 func (e *APIError) Error() string {
@@ -59,6 +67,14 @@ func IsNotFound(err error) bool {
 func IsConflict(err error) bool {
 	var ce *ConflictError
 	return errors.As(err, &ce)
+}
+
+// IsAutoAttached reports whether err is the 409 the API returns for a
+// detach or priority edit of a bundle that reaches the stack only by label:
+// there is no explicit attachment left to act on.
+func IsAutoAttached(err error) bool {
+	var ce *ConflictError
+	return errors.As(err, &ce) && ce.Code == CodeAutoAttached
 }
 
 // IsUnauthorized returns true if the error is an UnauthorizedError.

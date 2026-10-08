@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -722,13 +723,14 @@ func TestCRUD_BundleAttachments(t *testing.T) {
 	})
 	mux.HandleFunc("GET /api/v1/stacks/stack-1/bundles", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		now := time.Now()
-		_ = json.NewEncoder(w).Encode(ListAttachmentsResponse{
-			Attachments: []BundleAttachment{
-				{ID: "att-1", StackID: "stack-1", BundleID: "bundle-1", Priority: 0, AttachedAt: now},
-			},
-			Total: 1,
-		})
+		_, _ = w.Write([]byte(`{
+			"attachments": [{"id":"att-1","organization_id":"org-1","stack_id":"stack-1","bundle_id":"bundle-1",
+				"source":"explicit","priority":0,"attached_at":"2026-10-01T10:00:00Z","attached_by":"user-1"}],
+			"total": 1,
+			"auto_attached": [{"organization_id":"org-1","stack_id":"stack-1","bundle_id":"bundle-2",
+				"source":"auto","bundle_slug":"shared-hooks"}],
+			"auto_match_count": 1
+		}`))
 	})
 
 	server := httptest.NewServer(mux)
@@ -743,12 +745,29 @@ func TestCRUD_BundleAttachments(t *testing.T) {
 	}
 
 	// List
-	attachments, err := client.ListStackBundles(ctx, "stack-1")
+	list, err := client.ListStackBundles(ctx, "stack-1")
 	if err != nil {
 		t.Fatalf("ListStackBundles: %v", err)
 	}
-	if len(attachments) != 1 {
-		t.Errorf("expected 1 attachment, got %d", len(attachments))
+	if len(list.Attachments) != 1 || list.Total != 1 {
+		t.Fatalf("expected 1 explicit attachment, got %d (total %d)", len(list.Attachments), list.Total)
+	}
+	explicit := list.Attachments[0]
+	if explicit.Source != AttachmentSourceExplicit || explicit.Priority == nil || *explicit.Priority != 0 || explicit.AttachedAt == nil {
+		t.Errorf("explicit row = %+v, want source explicit, priority 0 and attached_at", explicit)
+	}
+	if len(list.AutoAttached) != 1 || list.AutoMatchCount != 1 {
+		t.Fatalf("expected 1 auto-attached row, got %d (count %d)", len(list.AutoAttached), list.AutoMatchCount)
+	}
+	auto := list.AutoAttached[0]
+	if auto.Source != AttachmentSourceAuto || auto.BundleSlug != "shared-hooks" || auto.Priority != nil || auto.ID != "" {
+		t.Errorf("auto row = %+v, want source auto, slug, no priority and no id", auto)
+	}
+	if got := list.ExplicitAttachment("bundle-1"); got == nil || got.ID != "att-1" {
+		t.Errorf("ExplicitAttachment(bundle-1) = %+v, want att-1", got)
+	}
+	if got := list.ExplicitAttachment("bundle-2"); got != nil {
+		t.Errorf("ExplicitAttachment(bundle-2) = %+v, want nil: an auto-attached bundle has no explicit attachment", got)
 	}
 
 	// Detach
@@ -836,5 +855,195 @@ func TestUpdateStackRequest_OmitsAnUnsetPRComment(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `"pr_comment":{"resource_addresses":"off"}`) {
 		t.Errorf("got %s", raw)
+	}
+}
+
+func TestUpdateBundlePriority_PatchesThePriority(t *testing.T) {
+	t.Parallel()
+
+	var gotMethod, gotPath, gotBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message":"priority updated successfully"}`))
+	}))
+	defer server.Close()
+
+	if err := newTestClient(t, server).UpdateBundlePriority(context.Background(), "stack-1", "bundle-1", 4); err != nil {
+		t.Fatalf("UpdateBundlePriority: %v", err)
+	}
+	if gotMethod != http.MethodPatch || gotPath != "/api/v1/stacks/stack-1/bundles/bundle-1" {
+		t.Errorf("request = %s %s, want PATCH /api/v1/stacks/stack-1/bundles/bundle-1", gotMethod, gotPath)
+	}
+	if gotBody != `{"priority":4}` {
+		t.Errorf("body = %s, want {\"priority\":4}", gotBody)
+	}
+}
+
+func TestDetachBundle_AutoAttachedConflictIsRecognised(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		body             string
+		wantAutoAttached bool
+	}{
+		{
+			name:             "auto_attached",
+			body:             `{"code":"auto_attached","message":"bundle is auto-attached by label"}`,
+			wantAutoAttached: true,
+		},
+		{
+			name:             "another conflict",
+			body:             `{"code":"version_conflict","message":"bundle version conflict"}`,
+			wantAutoAttached: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			err := newTestClient(t, server).DetachBundle(context.Background(), "stack-1", "bundle-1")
+			if !IsConflict(err) {
+				t.Fatalf("err = %v, want a ConflictError", err)
+			}
+			if got := IsAutoAttached(err); got != tt.wantAutoAttached {
+				t.Errorf("IsAutoAttached = %v, want %v (err %v)", got, tt.wantAutoAttached, err)
+			}
+		})
+	}
+}
+
+func TestIsAutoAttached_OnlyA409(t *testing.T) {
+	t.Parallel()
+
+	notConflict := &ValidationError{APIError: APIError{StatusCode: http.StatusBadRequest, Code: CodeAutoAttached}}
+	if IsAutoAttached(notConflict) {
+		t.Error("a 400 carrying the code must not count as auto_attached")
+	}
+	if IsAutoAttached(nil) {
+		t.Error("nil must not count as auto_attached")
+	}
+}
+
+func TestUpdateBundle_AcceptsTheStatusMessageResponse(t *testing.T) {
+	t.Parallel()
+
+	var gotBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message":"bundle updated successfully"}`))
+	}))
+	defer server.Close()
+
+	none := []string{}
+	if err := newTestClient(t, server).UpdateBundle(context.Background(), "bundle-1", UpdateBundleRequest{AutoAttachLabels: &none}); err != nil {
+		t.Fatalf("UpdateBundle: %v", err)
+	}
+	if gotBody != `{"auto_attach_labels":[]}` {
+		t.Errorf("body = %s, want only auto_attach_labels as [] (a clear)", gotBody)
+	}
+}
+
+func TestLabelRequests_AbsentPreservesAndEmptyClears(t *testing.T) {
+	t.Parallel()
+
+	raw, err := json.Marshal(UpdateStackRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "labels") {
+		t.Errorf("unset labels must be absent (absent preserves): %s", raw)
+	}
+	none := []string{}
+	raw, err = json.Marshal(UpdateStackRequest{Labels: &none})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != `{"labels":[]}` {
+		t.Errorf("got %s, want {\"labels\":[]}", raw)
+	}
+	raw, err = json.Marshal(UpdateBundleRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "auto_attach_labels") {
+		t.Errorf("unset auto_attach_labels must be absent (absent preserves): %s", raw)
+	}
+}
+
+func TestBundleContent_HooksNilOmittedEmptyClears(t *testing.T) {
+	t.Parallel()
+
+	raw, err := json.Marshal(BundleContent{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "hooks") {
+		t.Errorf("nil hooks must be absent (absent keeps the stored hooks): %s", raw)
+	}
+	raw, err = json.Marshal(BundleContent{Hooks: &Hooks{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"hooks":{}`) {
+		t.Errorf("empty hooks must marshal as {} (a clear): %s", raw)
+	}
+	raw, err = json.Marshal(BundleContent{Hooks: &Hooks{BeforePlan: []string{"make lint"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"hooks":{"before_plan":["make lint"]}`) {
+		t.Errorf("got %s", raw)
+	}
+}
+
+func TestGetBundle_DecodesHooksAndAutoAttachLabels(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"b1","auto_attach_labels":["prod","eu-west"],
+			"hooks":{"before_init":["echo init"],"after_apply":["./notify.sh","echo done"]}}`))
+	}))
+	defer server.Close()
+
+	bundle, err := newTestClient(t, server).GetBundle(context.Background(), "b1")
+	if err != nil {
+		t.Fatalf("GetBundle: %v", err)
+	}
+	if len(bundle.AutoAttachLabels) != 2 || bundle.AutoAttachLabels[1] != "eu-west" {
+		t.Errorf("auto_attach_labels = %v", bundle.AutoAttachLabels)
+	}
+	if bundle.Hooks == nil || len(bundle.Hooks.BeforeInit) != 1 || len(bundle.Hooks.AfterApply) != 2 || bundle.Hooks.BeforePlan != nil {
+		t.Errorf("hooks = %+v", bundle.Hooks)
+	}
+}
+
+func TestGetStack_DecodesLabels(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"s1","labels":["prod","team.payments"]}`))
+	}))
+	defer server.Close()
+
+	stack, err := newTestClient(t, server).GetStack(context.Background(), "s1")
+	if err != nil {
+		t.Fatalf("GetStack: %v", err)
+	}
+	if len(stack.Labels) != 2 || stack.Labels[0] != "prod" || stack.Labels[1] != "team.payments" {
+		t.Errorf("labels = %v", stack.Labels)
 	}
 }
