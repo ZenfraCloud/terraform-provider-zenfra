@@ -1,5 +1,5 @@
 // ABOUTME: Implements the zenfra_configuration_bundle Terraform resource with full CRUD lifecycle.
-// ABOUTME: Manages Zenfra configuration bundles including environment variables and mounted files with secret preservation.
+// ABOUTME: Manages bundles' env vars, mounted files and hooks (content) and auto-attach labels (metadata), preserving secrets.
 package bundle
 
 import (
@@ -15,13 +15,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/zenfra/terraform-provider-zenfra/internal/labelset"
+	"github.com/zenfra/terraform-provider-zenfra/internal/validate"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
 var (
 	_ resource.Resource                = &BundleResource{}
 	_ resource.ResourceWithImportState = &BundleResource{}
+	_ resource.ResourceWithModifyPlan  = &BundleResource{}
 )
 
 // NewBundleResource is a constructor for the bundle resource.
@@ -40,7 +44,7 @@ func (r *BundleResource) Metadata(_ context.Context, req resource.MetadataReques
 
 func (r *BundleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Zenfra configuration bundle containing environment variables and mounted files.",
+		Description: "Manages a Zenfra configuration bundle containing environment variables, mounted files and hooks.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier of the bundle.",
@@ -80,6 +84,25 @@ func (r *BundleResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Description: "Labels for categorizing the bundle.",
 				Optional:    true,
 				ElementType: types.StringType,
+			},
+			"auto_attach_labels": schema.SetAttribute{
+				Description: "Stack labels this bundle attaches itself to: every stack carrying at least one of them gets the " +
+					"bundle on its runs without a zenfra_bundle_attachment. Lowercase a-z, 0-9, '.', '_' and '-', 1-63 " +
+					"characters starting with a letter or digit, at most 20. A selector, not content: changing it does not " +
+					"change content_version. Terraform owns the whole set: omitting the attribute means none.",
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators:  []validator.Set{validate.Labels()},
+			},
+			"hooks": schema.SingleNestedAttribute{
+				Description: "Shell commands run before and after init, plan and apply on every run the bundle attaches to. " +
+					"Each phase is an ordered list of 1-32 commands of at most 4096 bytes, run with `sh -c`; the first " +
+					"non-zero exit stops the list. Hooks are content: changing them writes new content (fenced by " +
+					"content_version) and a run whose bundles change after it was created stops as stale. Terraform owns " +
+					"the hooks: omitting the attribute clears them. Only workers that run hooks claim such runs.",
+				Optional:   true,
+				Validators: []validator.Object{validate.HooksNotEmpty()},
+				Attributes: hookPhaseAttributes(),
 			},
 			"content_version": schema.Int64Attribute{
 				Description: "The version number of the bundle content.",
@@ -183,25 +206,10 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	createReq := zenfraclient.CreateBundleRequest{
-		Name:    plan.Name.ValueString(),
-		SpaceID: plan.SpaceID.ValueString(),
-	}
-	if !plan.Slug.IsNull() && !plan.Slug.IsUnknown() {
-		createReq.Slug = plan.Slug.ValueString()
-	} else {
-		createReq.Slug = plan.Name.ValueString()
-	}
-	if !plan.Description.IsNull() {
-		createReq.Description = plan.Description.ValueString()
-	}
-	if !plan.Labels.IsNull() {
-		var labels []string
-		resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &labels, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		createReq.Labels = labels
+	createReq, diags := buildCreateRequest(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	bundle, err := r.client.CreateBundle(ctx, createReq)
@@ -213,7 +221,8 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	// If content blocks are specified, update content after creating metadata
 	hasEnvVars := !plan.EnvironmentVariable.IsNull() && len(plan.EnvironmentVariable.Elements()) > 0
 	hasFiles := !plan.MountedFile.IsNull() && len(plan.MountedFile.Elements()) > 0
-	if hasEnvVars || hasFiles {
+	hasHooks := !plan.Hooks.IsNull()
+	if hasEnvVars || hasFiles || hasHooks {
 		contentReq := buildContentRequest(ctx, plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
@@ -233,6 +242,7 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	state.EnvironmentVariable = plan.EnvironmentVariable
 	state.MountedFile = plan.MountedFile
 	state.Labels = plan.Labels
+	resp.Diagnostics.Append(mapSelectorAndHooks(ctx, &state, bundle, plan.AutoAttachLabels)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
@@ -354,6 +364,8 @@ func (r *BundleResource) Read(ctx context.Context, req resource.ReadRequest, res
 		newState.Labels = types.ListNull(types.StringType)
 	}
 
+	resp.Diagnostics.Append(mapSelectorAndHooks(ctx, &newState, bundle, state.AutoAttachLabels)...)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -372,6 +384,7 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 	metadataChanged := !plan.Name.Equal(state.Name) ||
 		!plan.Description.Equal(state.Description) ||
 		!plan.Labels.Equal(state.Labels) ||
+		!plan.AutoAttachLabels.Equal(state.AutoAttachLabels) ||
 		!plan.SpaceID.Equal(state.SpaceID)
 
 	if metadataChanged {
@@ -381,12 +394,25 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 			updateReq.Description = &desc
 		}
 		if !plan.Labels.Equal(state.Labels) {
-			var labels []string
+			// Non-nil even when the plan is null: a nil slice would send
+			// null, which the API reads as "unchanged", not as a clear.
+			labels := []string{}
 			resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &labels, false)...)
 			if resp.Diagnostics.HasError() {
 				return
 			}
+			if labels == nil {
+				labels = []string{}
+			}
 			updateReq.Labels = &labels
+		}
+		if !plan.AutoAttachLabels.Equal(state.AutoAttachLabels) {
+			autoAttach, diags := labelset.ToAPI(ctx, plan.AutoAttachLabels)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			updateReq.AutoAttachLabels = &autoAttach
 		}
 		if !plan.SpaceID.Equal(state.SpaceID) {
 			spaceID := plan.SpaceID.ValueString()
@@ -401,11 +427,8 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
-	// Update content if env vars or mounted files changed
-	contentChanged := !plan.EnvironmentVariable.Equal(state.EnvironmentVariable) ||
-		!plan.MountedFile.Equal(state.MountedFile)
-
-	if contentChanged {
+	// Update content if env vars, mounted files or hooks changed
+	if contentChanged(plan, state) {
 		contentReq := buildContentRequest(ctx, plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
@@ -433,8 +456,35 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 	newState.EnvironmentVariable = plan.EnvironmentVariable
 	newState.MountedFile = plan.MountedFile
 	newState.Labels = plan.Labels
+	resp.Diagnostics.Append(mapSelectorAndHooks(ctx, &newState, bundle, plan.AutoAttachLabels)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
+}
+
+// ModifyPlan marks content_version unknown when the plan writes new content:
+// the write bumps it, and a planned value carried over from state would make
+// the applied result inconsistent with the plan.
+func (r *BundleResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var plan, state BundleModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if contentChanged(plan, state) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("content_version"), types.Int64Unknown())...)
+	}
+}
+
+// contentChanged reports whether the plan changes the bundle's content: its
+// environment variables, mounted files or hooks.
+func contentChanged(plan, state BundleModel) bool {
+	return !plan.EnvironmentVariable.Equal(state.EnvironmentVariable) ||
+		!plan.MountedFile.Equal(state.MountedFile) ||
+		!plan.Hooks.Equal(state.Hooks)
 }
 
 func (r *BundleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -477,13 +527,15 @@ func mountedFileAttrTypes() map[string]attr.Type {
 	}
 }
 
-// buildContentRequest extracts env vars and mounted files from the plan into an API content request.
+// buildContentRequest extracts env vars, mounted files and hooks from the
+// plan into an API content request. Hooks are always sent: the planned hooks,
+// or {} to clear them when the plan has none.
 func buildContentRequest(ctx context.Context, plan BundleModel, diags *diag.Diagnostics) zenfraclient.UpdateBundleContentRequest {
-	type bundleContent struct {
-		EnvironmentVariables []zenfraclient.EnvVariable `json:"environment_variables"`
-		MountedFiles         []zenfraclient.MountedFile `json:"mounted_files"`
-	}
-	content := bundleContent{}
+	content := zenfraclient.BundleContent{}
+
+	hooks, d := hooksToAPI(ctx, plan.Hooks)
+	diags.Append(d...)
+	content.Hooks = hooks
 
 	if !plan.EnvironmentVariable.IsNull() {
 		var envVars []EnvVariableModel
@@ -520,4 +572,67 @@ func buildContentRequest(ctx context.Context, plan BundleModel, diags *diag.Diag
 	return zenfraclient.UpdateBundleContentRequest{
 		Content: content,
 	}
+}
+
+// hookPhaseAttributes returns the hooks object's six phase attributes.
+func hookPhaseAttributes() map[string]schema.Attribute {
+	descriptions := map[string]string{
+		"before_init":  "Commands run before terraform init.",
+		"after_init":   "Commands run after terraform init.",
+		"before_plan":  "Commands run before terraform plan.",
+		"after_plan":   "Commands run after terraform plan.",
+		"before_apply": "Commands run before terraform apply.",
+		"after_apply":  "Commands run after terraform apply.",
+	}
+	attrs := make(map[string]schema.Attribute, len(hookPhases))
+	for _, phase := range hookPhases {
+		attrs[phase] = schema.ListAttribute{
+			Description: descriptions[phase],
+			Optional:    true,
+			ElementType: types.StringType,
+			Validators:  []validator.List{validate.HookCommands()},
+		}
+	}
+	return attrs
+}
+
+// mapSelectorAndHooks sets the auto-attach selector and the hooks from the
+// API. priorAutoAttach is the plan (after a write) or the state being
+// refreshed; it only decides whether "no labels" reads back as null or empty.
+func mapSelectorAndHooks(ctx context.Context, model *BundleModel, bundle *zenfraclient.Bundle, priorAutoAttach types.Set) diag.Diagnostics {
+	autoAttach, diags := labelset.FromAPI(bundle.AutoAttachLabels, priorAutoAttach)
+	model.AutoAttachLabels = autoAttach
+	hooks, d := hooksFromAPI(ctx, bundle.Hooks)
+	diags.Append(d...)
+	model.Hooks = hooks
+	return diags
+}
+
+// buildCreateRequest maps the plan's metadata, including the auto-attach
+// selector, into a create request. Content is written separately.
+func buildCreateRequest(ctx context.Context, plan BundleModel) (zenfraclient.CreateBundleRequest, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	createReq := zenfraclient.CreateBundleRequest{
+		Name:    plan.Name.ValueString(),
+		SpaceID: plan.SpaceID.ValueString(),
+	}
+	if !plan.Slug.IsNull() && !plan.Slug.IsUnknown() {
+		createReq.Slug = plan.Slug.ValueString()
+	} else {
+		createReq.Slug = plan.Name.ValueString()
+	}
+	if !plan.Description.IsNull() {
+		createReq.Description = plan.Description.ValueString()
+	}
+	if !plan.Labels.IsNull() {
+		var labels []string
+		diags.Append(plan.Labels.ElementsAs(ctx, &labels, false)...)
+		createReq.Labels = labels
+	}
+	autoAttach, d := labelset.ToAPI(ctx, plan.AutoAttachLabels)
+	diags.Append(d...)
+	if len(autoAttach) > 0 {
+		createReq.AutoAttachLabels = autoAttach
+	}
+	return createReq, diags
 }
