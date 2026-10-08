@@ -5,6 +5,7 @@ package bundle
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,8 +29,10 @@ const testBundleID = "bundle-1"
 type fakeBundleAPI struct {
 	mu            sync.Mutex
 	bundle        zenfraclient.Bundle
+	createBody    map[string]json.RawMessage
 	metadataBody  []map[string]json.RawMessage
 	contentBodies []map[string]json.RawMessage
+	order         []string
 }
 
 func newFakeBundleAPI() *fakeBundleAPI {
@@ -55,6 +58,8 @@ func (f *fakeBundleAPI) handler(t *testing.T) http.Handler {
 	mux.HandleFunc("POST /api/v1/bundles", func(w http.ResponseWriter, r *http.Request) {
 		body := decodeBody(t, r)
 		f.mu.Lock()
+		f.createBody = body
+		f.order = append(f.order, "create")
 		if l, ok := body["auto_attach_labels"]; ok {
 			_ = json.Unmarshal(l, &f.bundle.AutoAttachLabels)
 		}
@@ -69,6 +74,7 @@ func (f *fakeBundleAPI) handler(t *testing.T) http.Handler {
 		body := decodeBody(t, r)
 		f.mu.Lock()
 		f.metadataBody = append(f.metadataBody, body)
+		f.order = append(f.order, "metadata")
 		if l, ok := body["auto_attach_labels"]; ok && string(l) != "null" {
 			f.bundle.AutoAttachLabels = []string{}
 			_ = json.Unmarshal(l, &f.bundle.AutoAttachLabels)
@@ -82,6 +88,7 @@ func (f *fakeBundleAPI) handler(t *testing.T) http.Handler {
 		_ = json.Unmarshal(body["content"], &content)
 		f.mu.Lock()
 		f.contentBodies = append(f.contentBodies, body)
+		f.order = append(f.order, "content")
 		if h, ok := content["hooks"]; ok && string(h) != "null" {
 			var hooks zenfraclient.Hooks
 			_ = json.Unmarshal(h, &hooks)
@@ -462,5 +469,45 @@ func TestModifyPlan_ContentChangeMakesContentVersionUnknown(t *testing.T) {
 				t.Errorf("content_version unknown = %v, want %v", version.IsUnknown(), tt.wantUnknown)
 			}
 		})
+	}
+}
+
+func TestCreate_SelectorFollowsTheContent(t *testing.T) {
+	t.Parallel()
+
+	h := newBundleHarness(t)
+	planned := baseModel()
+	planned.AutoAttachLabels = labels("prod")
+	planned.Hooks = hooksObject(t, cmds("make lint"), types.ListNull(types.StringType))
+
+	got := h.create(t, planned)
+
+	if want := []string{"create", "content", "metadata"}; fmt.Sprint(h.fake.order) != fmt.Sprint(want) {
+		t.Errorf("writes = %v, want %v: an empty bundle must not attach by label", h.fake.order, want)
+	}
+	if _, ok := h.fake.createBody["auto_attach_labels"]; ok {
+		t.Errorf("create carried the selector: %s", h.fake.createBody["auto_attach_labels"])
+	}
+	if !got.AutoAttachLabels.Equal(labels("prod")) || !got.Hooks.Equal(planned.Hooks) {
+		t.Errorf("state = %v / %v", got.AutoAttachLabels, got.Hooks)
+	}
+}
+
+func TestUpdate_ContentIsWrittenBeforeTheSelector(t *testing.T) {
+	t.Parallel()
+
+	h := newBundleHarness(t)
+	prior := baseModel()
+	planned := prior
+	planned.AutoAttachLabels = labels("prod")
+	planned.Hooks = hooksObject(t, cmds("make lint"), types.ListNull(types.StringType))
+
+	got := h.update(t, prior, planned)
+
+	if want := []string{"content", "metadata"}; fmt.Sprint(h.fake.order) != fmt.Sprint(want) {
+		t.Errorf("writes = %v, want %v", h.fake.order, want)
+	}
+	if !got.AutoAttachLabels.Equal(labels("prod")) || !got.Hooks.Equal(planned.Hooks) || got.ContentVersion.ValueInt64() != 2 {
+		t.Errorf("state = %v / %v / %v", got.AutoAttachLabels, got.Hooks, got.ContentVersion)
 	}
 }

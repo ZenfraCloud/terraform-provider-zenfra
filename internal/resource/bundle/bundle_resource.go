@@ -212,29 +212,28 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	// A bundle with content gets its auto-attach selector only after the
+	// content: writing content makes the runs that already hold the bundle
+	// stale, so it must not attach by label while it is still empty.
+	hasEnvVars := !plan.EnvironmentVariable.IsNull() && len(plan.EnvironmentVariable.Elements()) > 0
+	hasFiles := !plan.MountedFile.IsNull() && len(plan.MountedFile.Elements()) > 0
+	hasContent := hasEnvVars || hasFiles || !plan.Hooks.IsNull()
+	selector := createReq.AutoAttachLabels
+	if hasContent {
+		createReq.AutoAttachLabels = nil
+	}
+
 	bundle, err := r.client.CreateBundle(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error Creating Bundle", fmt.Sprintf("Could not create bundle: %s", err))
 		return
 	}
 
-	// If content blocks are specified, update content after creating metadata
-	hasEnvVars := !plan.EnvironmentVariable.IsNull() && len(plan.EnvironmentVariable.Elements()) > 0
-	hasFiles := !plan.MountedFile.IsNull() && len(plan.MountedFile.Elements()) > 0
-	hasHooks := !plan.Hooks.IsNull()
-	if hasEnvVars || hasFiles || hasHooks {
-		contentReq := buildContentRequest(ctx, plan, &resp.Diagnostics)
+	if hasContent {
+		bundle = r.writeContentThenSelector(ctx, plan, bundle, selector, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		contentReq.ExpectedVersion = bundle.ContentVersion
-
-		contentResp, err := r.client.UpdateBundleContent(ctx, bundle.ID, contentReq)
-		if err != nil {
-			resp.Diagnostics.AddError("Error Setting Bundle Content", fmt.Sprintf("Could not set bundle content: %s", err))
-			return
-		}
-		bundle = &contentResp.Bundle
 	}
 
 	state := mapBundleToState(bundle)
@@ -245,6 +244,36 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	resp.Diagnostics.Append(mapSelectorAndHooks(ctx, &state, bundle, plan.AutoAttachLabels)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
+}
+
+// writeContentThenSelector writes a new bundle's content, then its
+// auto-attach selector, and returns the bundle as it stands afterwards.
+func (r *BundleResource) writeContentThenSelector(
+	ctx context.Context, plan BundleModel, bundle *zenfraclient.Bundle, selector []string, diags *diag.Diagnostics,
+) *zenfraclient.Bundle {
+	contentReq := buildContentRequest(ctx, plan, diags)
+	if diags.HasError() {
+		return nil
+	}
+	contentReq.ExpectedVersion = bundle.ContentVersion
+	contentResp, err := r.client.UpdateBundleContent(ctx, bundle.ID, contentReq)
+	if err != nil {
+		diags.AddError("Error Setting Bundle Content", fmt.Sprintf("Could not set bundle content: %s", err))
+		return nil
+	}
+	if len(selector) == 0 {
+		return &contentResp.Bundle
+	}
+	if err := r.client.UpdateBundle(ctx, bundle.ID, zenfraclient.UpdateBundleRequest{AutoAttachLabels: &selector}); err != nil {
+		diags.AddError("Error Setting Bundle Auto-Attach Labels", fmt.Sprintf("Could not set auto_attach_labels: %s", err))
+		return nil
+	}
+	updated, err := r.client.GetBundle(ctx, bundle.ID)
+	if err != nil {
+		diags.AddError("Error Reading Bundle", fmt.Sprintf("Could not read bundle: %s", err))
+		return nil
+	}
+	return updated
 }
 
 //nolint:gocognit,gocyclo // Terraform CRUD with secret preservation requires complex state management
@@ -380,7 +409,25 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	var bundle *zenfraclient.Bundle
 
-	// Update metadata if changed
+	// Update content if env vars, mounted files or hooks changed
+	if contentChanged(plan, state) {
+		contentReq := buildContentRequest(ctx, plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		contentReq.ExpectedVersion = state.ContentVersion.ValueInt64()
+
+		contentResp, err := r.client.UpdateBundleContent(ctx, state.ID.ValueString(), contentReq)
+		if err != nil {
+			resp.Diagnostics.AddError("Error Updating Bundle Content", fmt.Sprintf("Could not update bundle content: %s", err))
+			return
+		}
+		bundle = &contentResp.Bundle
+	}
+
+	// Update metadata if changed. After the content: a selector added in the
+	// same apply must not attach the bundle by label before its new content
+	// is written, or the runs that pick it up meanwhile go stale.
 	metadataChanged := !plan.Name.Equal(state.Name) ||
 		!plan.Description.Equal(state.Description) ||
 		!plan.Labels.Equal(state.Labels) ||
@@ -425,22 +472,7 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 			resp.Diagnostics.AddError("Error Updating Bundle", fmt.Sprintf("Could not update bundle: %s", err))
 			return
 		}
-	}
-
-	// Update content if env vars, mounted files or hooks changed
-	if contentChanged(plan, state) {
-		contentReq := buildContentRequest(ctx, plan, &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		contentReq.ExpectedVersion = state.ContentVersion.ValueInt64()
-
-		contentResp, err := r.client.UpdateBundleContent(ctx, state.ID.ValueString(), contentReq)
-		if err != nil {
-			resp.Diagnostics.AddError("Error Updating Bundle Content", fmt.Sprintf("Could not update bundle content: %s", err))
-			return
-		}
-		bundle = &contentResp.Bundle
+		bundle = nil
 	}
 
 	if bundle == nil {
