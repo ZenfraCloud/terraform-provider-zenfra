@@ -1,5 +1,5 @@
 // ABOUTME: Implements the zenfra_stack Terraform resource with full CRUD lifecycle.
-// ABOUTME: Manages stacks with nested source (raw_git/vcs) and IAC config.
+// ABOUTME: Manages stacks with nested source (raw_git/vcs), IAC config and labels.
 package stack
 
 import (
@@ -13,8 +13,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/zenfra/terraform-provider-zenfra/internal/labelset"
+	"github.com/zenfra/terraform-provider-zenfra/internal/validate"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
@@ -169,6 +172,15 @@ func (r *StackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					},
 				},
 			},
+			"labels": schema.SetAttribute{
+				Description: "Labels on the stack. A configuration bundle whose auto_attach_labels share a label with the stack " +
+					"attaches to it automatically. Lowercase a-z, 0-9, '.', '_' and '-', 1-63 characters starting with a letter " +
+					"or digit, at most 20. Terraform owns the whole set: omitting the attribute means no labels, and labels " +
+					"added outside Terraform are removed on the next apply.",
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators:  []validator.Set{validate.Labels()},
+			},
 			"created_at": schema.StringAttribute{
 				Description: "Timestamp when the stack was created.",
 				Computed:    true,
@@ -261,6 +273,15 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 		createReq.WorkerPoolID = &poolID
 	}
 
+	labels, diags := labelset.ToAPI(ctx, plan.Labels)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if len(labels) > 0 {
+		createReq.Labels = labels
+	}
+
 	// Create the stack
 	stack, err := r.client.CreateStack(ctx, createReq)
 	if err != nil {
@@ -272,7 +293,7 @@ func (r *StackResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	// Map response to state
-	state, diags := mapStackToState(ctx, stack)
+	state, diags := mapStackToState(ctx, stack, plan.Labels)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -307,7 +328,7 @@ func (r *StackResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 
 	// Map response to state
-	newState, diags := mapStackToState(ctx, stack)
+	newState, diags := mapStackToState(ctx, stack, state.Labels)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -398,6 +419,18 @@ func (r *StackResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		hasChanges = true
 	}
 
+	// Labels: Terraform owns the whole set, so an unset attribute sends []
+	// (clear), never an absent field (which the API reads as "unchanged").
+	if !plan.Labels.Equal(state.Labels) {
+		labels, diags := labelset.ToAPI(ctx, plan.Labels)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		updateReq.Labels = &labels
+		hasChanges = true
+	}
+
 	// Update the stack if there are changes
 	if hasChanges {
 		_, err := r.client.UpdateStack(ctx, state.ID.ValueString(), updateReq)
@@ -421,7 +454,7 @@ func (r *StackResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	// Map response to state
-	newState, diags := mapStackToState(ctx, stack)
+	newState, diags := mapStackToState(ctx, stack, plan.Labels)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -462,7 +495,9 @@ func (r *StackResource) ImportState(ctx context.Context, req resource.ImportStat
 }
 
 // mapStackToState converts an API Stack response to a StackModel for Terraform state.
-func mapStackToState(ctx context.Context, stack *zenfraclient.Stack) (*StackModel, diag.Diagnostics) {
+// priorLabels is the plan (after a write) or the state being refreshed; it only
+// decides whether "no labels" reads back as null or as an empty set.
+func mapStackToState(ctx context.Context, stack *zenfraclient.Stack, priorLabels types.Set) (*StackModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	// Map IAC config
@@ -539,6 +574,10 @@ func mapStackToState(ctx context.Context, stack *zenfraclient.Stack) (*StackMode
 	} else {
 		model.WorkerPoolID = types.StringNull()
 	}
+
+	labels, d := labelset.FromAPI(stack.Labels, priorLabels)
+	diags.Append(d...)
+	model.Labels = labels
 
 	return model, diags
 }

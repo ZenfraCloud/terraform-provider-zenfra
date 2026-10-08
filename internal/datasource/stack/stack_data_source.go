@@ -1,5 +1,5 @@
 // ABOUTME: Data source for reading a single Zenfra stack by ID.
-// ABOUTME: Returns all stack attributes including nested source and IAC configuration.
+// ABOUTME: Returns all stack attributes including nested source, IAC configuration and labels.
 
 package stack
 
@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/zenfra/terraform-provider-zenfra/internal/labelset"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
@@ -26,6 +27,7 @@ type stackDataSourceModel struct {
 	AllowPublicPool types.Bool        `tfsdk:"allow_public_pool"`
 	IAC             *iacConfigModel   `tfsdk:"iac"`
 	Source          *stackSourceModel `tfsdk:"source"`
+	Labels          types.Set         `tfsdk:"labels"`
 	CreatedBy       types.String      `tfsdk:"created_by"`
 	CreatedAt       types.String      `tfsdk:"created_at"`
 	UpdatedAt       types.String      `tfsdk:"updated_at"`
@@ -174,6 +176,11 @@ func (d *stackDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 					},
 				},
 			},
+			"labels": schema.SetAttribute{
+				MarkdownDescription: "Labels on the stack. Configuration bundles whose `auto_attach_labels` share a label with the stack attach to it automatically. Empty when the stack has none.",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
 			"created_by": schema.StringAttribute{
 				MarkdownDescription: "The user ID who created this stack.",
 				Computed:            true,
@@ -262,6 +269,10 @@ func (d *stackDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			Path:          types.StringValue(stack.Source.VCS.Path),
 		}
 	}
+
+	labels, diags := labelset.Computed(stack.Labels)
+	resp.Diagnostics.Append(diags...)
+	data.Labels = labels
 
 	data.CreatedBy = types.StringValue(stack.CreatedBy)
 	data.CreatedAt = types.StringValue(stack.CreatedAt.Format("2006-01-02T15:04:05Z07:00"))

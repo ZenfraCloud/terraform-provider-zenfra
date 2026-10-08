@@ -51,7 +51,7 @@ func TestMapStackToState_RawGitSource(t *testing.T) {
 	}
 
 	// Convert to Terraform state model
-	model, diags := mapStackToState(ctx, apiStack)
+	model, diags := mapStackToState(ctx, apiStack, types.SetNull(types.StringType))
 	if diags.HasError() {
 		t.Fatalf("mapStackToState returned errors: %v", diags.Errors())
 	}
@@ -161,7 +161,7 @@ func TestMapStackToState_VCSSource(t *testing.T) {
 	}
 
 	// Convert to Terraform state model
-	model, diags := mapStackToState(ctx, apiStack)
+	model, diags := mapStackToState(ctx, apiStack, types.SetNull(types.StringType))
 	if diags.HasError() {
 		t.Fatalf("mapStackToState returned errors: %v", diags.Errors())
 	}
