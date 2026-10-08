@@ -1,4 +1,8 @@
 resource "zenfra_bundle_attachment" "app_aws" {
   stack_id  = zenfra_stack.app.id
   bundle_id = zenfra_configuration_bundle.aws_credentials.id
+
+  # Explicit attachments apply in ascending priority; the higher one wins a
+  # conflicting environment variable or file.
+  priority = 10
 }

@@ -11,4 +11,5 @@ type BundleAttachmentModel struct {
 	ID       types.String `tfsdk:"id"`
 	StackID  types.String `tfsdk:"stack_id"`
 	BundleID types.String `tfsdk:"bundle_id"`
+	Priority types.Int64  `tfsdk:"priority"`
 }

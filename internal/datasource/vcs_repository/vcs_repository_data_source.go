@@ -98,6 +98,9 @@ func (d *vcsRepositoryDataSource) Configure(_ context.Context, req datasource.Co
 	d.client = client
 }
 
+// Read looks a repository up by id, or by integration_id and full_name.
+//
+//nolint:gocognit,gocyclo // two lookup modes with their own validation and errors
 func (d *vcsRepositoryDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var data vcsRepositoryDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
@@ -109,7 +112,7 @@ func (d *vcsRepositoryDataSource) Read(ctx context.Context, req datasource.ReadR
 	hasIntegrationID := !data.IntegrationID.IsNull() && !data.IntegrationID.IsUnknown()
 	hasFullName := !data.FullName.IsNull() && !data.FullName.IsUnknown()
 
-	if !hasID && !(hasIntegrationID && hasFullName) {
+	if !hasID && (!hasIntegrationID || !hasFullName) {
 		resp.Diagnostics.AddError("Missing Attributes",
 			"Either `id` or both `integration_id` and `full_name` must be specified.")
 		return

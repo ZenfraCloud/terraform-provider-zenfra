@@ -3,6 +3,9 @@ resource "zenfra_stack" "app" {
   name     = "Application Stack"
   space_id = zenfra_space.production.id
 
+  # Bundles whose auto_attach_labels include one of these attach automatically.
+  labels = ["production", "team.payments"]
+
   iac {
     engine  = "terraform"
     version = "1.9.0"

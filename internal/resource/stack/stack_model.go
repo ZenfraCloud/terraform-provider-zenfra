@@ -17,6 +17,7 @@ type StackModel struct {
 	AllowPublicPool types.Bool   `tfsdk:"allow_public_pool"`
 	IAC             types.Object `tfsdk:"iac"`
 	Source          types.Object `tfsdk:"source"`
+	Labels          types.Set    `tfsdk:"labels"`
 	CreatedAt       types.String `tfsdk:"created_at"`
 	UpdatedAt       types.String `tfsdk:"updated_at"`
 	CreatedBy       types.String `tfsdk:"created_by"`

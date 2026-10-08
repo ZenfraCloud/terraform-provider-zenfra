@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/zenfra/terraform-provider-zenfra/internal/labelset"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
@@ -27,6 +28,7 @@ type stacksListItemModel struct {
 	Name           types.String `tfsdk:"name"`
 	SpaceID        types.String `tfsdk:"space_id"`
 	OrganizationID types.String `tfsdk:"organization_id"`
+	Labels         types.Set    `tfsdk:"labels"`
 }
 
 var _ datasource.DataSource = &stacksDataSource{}
@@ -68,6 +70,11 @@ func (d *stacksDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 						"organization_id": schema.StringAttribute{
 							MarkdownDescription: "The organization ID that owns this stack.",
 							Computed:            true,
+						},
+						"labels": schema.SetAttribute{
+							MarkdownDescription: "Labels on the stack. Empty when the stack has none.",
+							Computed:            true,
+							ElementType:         types.StringType,
 						},
 					},
 				},
@@ -116,11 +123,14 @@ func (d *stacksDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	// Map results
 	data.Stacks = make([]stacksListItemModel, 0, len(stacks))
 	for i := range stacks {
+		labels, diags := labelset.Computed(stacks[i].Labels)
+		resp.Diagnostics.Append(diags...)
 		data.Stacks = append(data.Stacks, stacksListItemModel{
 			ID:             types.StringValue(stacks[i].ID),
 			Name:           types.StringValue(stacks[i].Name),
 			SpaceID:        types.StringValue(stacks[i].SpaceID),
 			OrganizationID: types.StringValue(stacks[i].OrganizationID),
+			Labels:         labels,
 		})
 	}
 

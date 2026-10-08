@@ -38,16 +38,16 @@ func (c *Client) ListBundles(ctx context.Context) ([]Bundle, error) {
 	return resp.Bundles, nil
 }
 
-// UpdateBundle updates bundle metadata.
-func (c *Client) UpdateBundle(ctx context.Context, id string, req UpdateBundleRequest) (*Bundle, error) {
-	var bundle Bundle
-	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/bundles/"+id, req, &bundle); err != nil {
-		return nil, fmt.Errorf("update bundle: %w", err)
+// UpdateBundle updates bundle metadata. The API answers with a status
+// message, not the bundle, so callers read the bundle back with GetBundle.
+func (c *Client) UpdateBundle(ctx context.Context, id string, req UpdateBundleRequest) error {
+	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/bundles/"+id, req, nil); err != nil {
+		return fmt.Errorf("update bundle: %w", err)
 	}
-	return &bundle, nil
+	return nil
 }
 
-// UpdateBundleContent updates the content (env vars, mounted files) of a bundle.
+// UpdateBundleContent updates the content (env vars, mounted files, hooks) of a bundle.
 func (c *Client) UpdateBundleContent(ctx context.Context, id string, req UpdateBundleContentRequest) (*UpdateBundleContentResponse, error) {
 	var resp UpdateBundleContentResponse
 	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/bundles/"+id+"/content", req, &resp); err != nil {
