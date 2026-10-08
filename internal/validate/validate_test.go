@@ -239,3 +239,32 @@ func TestHooksNotEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestNonNegative(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		value     types.Int64
+		wantError bool
+	}{
+		{name: "null", value: types.Int64Null()},
+		{name: "unknown", value: types.Int64Unknown()},
+		{name: "zero", value: types.Int64Value(0)},
+		{name: "positive", value: types.Int64Value(7)},
+		{name: "negative", value: types.Int64Value(-1), wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			resp := &validator.Int64Response{}
+			NonNegative().ValidateInt64(context.Background(), validator.Int64Request{
+				Path:        path.Root("priority"),
+				ConfigValue: tt.value,
+			}, resp)
+			if got := resp.Diagnostics.HasError(); got != tt.wantError {
+				t.Errorf("HasError = %v, want %v: %v", got, tt.wantError, resp.Diagnostics)
+			}
+		})
+	}
+}
