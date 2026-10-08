@@ -231,6 +231,15 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	// The bundle exists from here on. Record it as created, with no content,
+	// before the writes below: if one fails, Terraform keeps it as tainted and
+	// replaces it, instead of losing track of a bundle that holds its slug.
+	created := createdState(ctx, plan, bundle, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, created)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if hasContent {
 		bundle = r.writeContentThenSelector(ctx, plan, bundle, selector, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
@@ -246,6 +255,18 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	resp.Diagnostics.Append(mapSelectorAndHooks(ctx, &state, bundle, plan.AutoAttachLabels)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
+}
+
+// createdState is the state of a bundle just created, before any content
+// write: metadata from the API, no content, and the selector and hooks the
+// API holds.
+func createdState(ctx context.Context, plan BundleModel, bundle *zenfraclient.Bundle, diags *diag.Diagnostics) BundleModel {
+	state := mapBundleToState(bundle)
+	state.Labels = plan.Labels
+	state.EnvironmentVariable = types.SetNull(types.ObjectType{AttrTypes: envVarAttrTypes()})
+	state.MountedFile = types.SetNull(types.ObjectType{AttrTypes: mountedFileAttrTypes()})
+	diags.Append(mapSelectorAndHooks(ctx, &state, bundle, plan.AutoAttachLabels)...)
+	return state
 }
 
 // writeContentThenSelector writes a new bundle's content, then its

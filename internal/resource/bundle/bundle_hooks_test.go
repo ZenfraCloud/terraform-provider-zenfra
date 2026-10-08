@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +34,8 @@ type fakeBundleAPI struct {
 	metadataBody  []map[string]json.RawMessage
 	contentBodies []map[string]json.RawMessage
 	order         []string
+	failContent   bool // the content PUT answers 422
+	failMetadata  bool // the metadata PUT answers 422
 }
 
 func newFakeBundleAPI() *fakeBundleAPI {
@@ -75,6 +78,12 @@ func (f *fakeBundleAPI) handler(t *testing.T) http.Handler {
 		f.mu.Lock()
 		f.metadataBody = append(f.metadataBody, body)
 		f.order = append(f.order, "metadata")
+		if f.failMetadata {
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			_, _ = w.Write([]byte(`{"code":"invalid_input","message":"selector refused"}`))
+			return
+		}
 		if l, ok := body["auto_attach_labels"]; ok && string(l) != "null" {
 			f.bundle.AutoAttachLabels = []string{}
 			_ = json.Unmarshal(l, &f.bundle.AutoAttachLabels)
@@ -89,6 +98,12 @@ func (f *fakeBundleAPI) handler(t *testing.T) http.Handler {
 		f.mu.Lock()
 		f.contentBodies = append(f.contentBodies, body)
 		f.order = append(f.order, "content")
+		if f.failContent {
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			_, _ = w.Write([]byte(`{"code":"invalid_argument","message":"content refused"}`))
+			return
+		}
 		if h, ok := content["hooks"]; ok && string(h) != "null" {
 			var hooks zenfraclient.Hooks
 			_ = json.Unmarshal(h, &hooks)
@@ -509,5 +524,57 @@ func TestUpdate_ContentIsWrittenBeforeTheSelector(t *testing.T) {
 	}
 	if !got.AutoAttachLabels.Equal(labels("prod")) || !got.Hooks.Equal(planned.Hooks) || got.ContentVersion.ValueInt64() != 2 {
 		t.Errorf("state = %v / %v / %v", got.AutoAttachLabels, got.Hooks, got.ContentVersion)
+	}
+}
+
+// A write that fails after the bundle exists must leave it in state, tainted,
+// not untracked: an untracked bundle holds its slug and the next apply fails
+// on a duplicate.
+func TestCreate_FailureAfterCreateKeepsTheBundleTracked(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		fail      func(*fakeBundleAPI)
+		wantError string
+	}{
+		{name: "content write fails", fail: func(f *fakeBundleAPI) { f.failContent = true }, wantError: "content refused"},
+		{name: "selector write fails", fail: func(f *fakeBundleAPI) { f.failMetadata = true }, wantError: "selector refused"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := newBundleHarness(t)
+			tt.fail(h.fake)
+			planned := baseModel()
+			planned.ID = types.StringUnknown()
+			planned.AutoAttachLabels = labels("prod")
+			planned.Hooks = hooksObject(t, cmds("make lint"), types.ListNull(types.StringType))
+
+			ctx := context.Background()
+			plan := tfsdk.Plan{Schema: h.schema.Schema}
+			if d := plan.Set(ctx, planned); d.HasError() {
+				t.Fatal(d)
+			}
+			resp := resource.CreateResponse{State: tfsdk.State{Schema: h.schema.Schema}}
+			h.r.Create(ctx, resource.CreateRequest{Plan: plan}, &resp)
+
+			if !resp.Diagnostics.HasError() {
+				t.Fatal("expected an error diagnostic")
+			}
+			if detail := resp.Diagnostics.Errors()[0].Detail(); !strings.Contains(detail, tt.wantError) {
+				t.Errorf("error detail = %q, want it to carry %q", detail, tt.wantError)
+			}
+			if resp.State.Raw.IsNull() {
+				t.Fatal("state is empty: the created bundle is not tracked")
+			}
+			var id types.String
+			if d := resp.State.GetAttribute(ctx, path.Root("id"), &id); d.HasError() {
+				t.Fatal(d)
+			}
+			if id.ValueString() != testBundleID {
+				t.Errorf("state id = %v, want %s", id, testBundleID)
+			}
+		})
 	}
 }

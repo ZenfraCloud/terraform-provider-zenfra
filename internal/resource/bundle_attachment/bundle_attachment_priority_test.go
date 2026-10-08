@@ -34,6 +34,7 @@ type fakeAttachmentAPI struct {
 	auto      map[string]bool
 	patches   []string
 	detachErr int // status DELETE answers with, 0 = normal behaviour
+	patchErr  int // status PATCH answers with, 0 = normal behaviour
 }
 
 func (f *fakeAttachmentAPI) handler() http.Handler {
@@ -74,6 +75,11 @@ func (f *fakeAttachmentAPI) handler() http.Handler {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.patches = append(f.patches, string(raw))
+		if f.patchErr != 0 {
+			w.WriteHeader(f.patchErr)
+			_, _ = w.Write([]byte(`{"code":"internal","message":"patch refused"}`))
+			return
+		}
 		id := r.PathValue("bundle")
 		if _, ok := f.explicit[id]; !ok {
 			f.notAttached(w, id)
@@ -366,5 +372,32 @@ func TestImportState_LeavesPriorityToRead(t *testing.T) {
 	}
 	if got.Priority.ValueInt64() != 4 {
 		t.Errorf("priority after import = %v, want 4", got.Priority)
+	}
+}
+
+// A priority PATCH that fails after the attach must leave the attachment in
+// state (tainted, at the priority it has), not untracked.
+func TestCreate_PriorityFailureKeepsTheAttachmentTracked(t *testing.T) {
+	t.Parallel()
+
+	h := newAttachmentHarness(t)
+	h.fake.patchErr = http.StatusInternalServerError
+	planned := model(types.Int64Value(5))
+	planned.ID = types.StringUnknown()
+	resp := resource.CreateResponse{State: tfsdk.State{Schema: h.schema.Schema}}
+	h.r.Create(context.Background(), resource.CreateRequest{Plan: h.plan(t, planned)}, &resp)
+
+	if !resp.Diagnostics.HasError() || !strings.Contains(resp.Diagnostics.Errors()[0].Detail(), "patch refused") {
+		t.Fatalf("diagnostics = %v, want the PATCH failure", resp.Diagnostics)
+	}
+	if resp.State.Raw.IsNull() {
+		t.Fatal("state is empty: the attachment is not tracked")
+	}
+	var got BundleAttachmentModel
+	if d := resp.State.Get(context.Background(), &got); d.HasError() {
+		t.Fatal(d)
+	}
+	if got.ID.ValueString() != testStackID+":"+testBundleID || got.Priority.ValueInt64() != 0 {
+		t.Errorf("state = %+v, want the attachment at priority 0", got)
 	}
 }
