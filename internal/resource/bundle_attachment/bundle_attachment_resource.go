@@ -244,8 +244,8 @@ func (r *BundleAttachmentResource) setPriority(ctx context.Context, stackID, bun
 		return fmt.Errorf("bundle %s has no explicit attachment to stack %s any more; it reaches the stack only by "+
 			"label, and a label match has no priority of its own: %w", bundleID, stackID, err)
 	case priority == 0 && isValidation(err):
-		return fmt.Errorf("the API refused to set priority 0 on bundle %s for stack %s; a new attachment starts at 0, "+
-			"so replace the attachment (terraform apply -replace) to return it to 0: %w", bundleID, stackID, err)
+		return fmt.Errorf("the API refused to set priority 0 on bundle %s for stack %s (an API older than this provider); "+
+			"a new attachment starts at 0, so replace the attachment (terraform apply -replace) to return it to 0: %w", bundleID, stackID, err)
 	default:
 		return fmt.Errorf("could not set the priority of bundle %s on stack %s: %w", bundleID, stackID, err)
 	}

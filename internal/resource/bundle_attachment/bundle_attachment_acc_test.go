@@ -127,12 +127,23 @@ func TestAccBundleAttachment_priorityInPlaceBesideAutoAttach(t *testing.T) {
 				),
 			},
 			{
+				// Back to the default, still in place.
+				Config: attachmentConfig(prefix, 0),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(attachment, plancheck.ResourceActionUpdate)},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(attachment, "priority", "0"),
+					apiAttachments(0),
+				),
+			},
+			{
 				ResourceName:      attachment,
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
 			{
-				Config: attachmentConfig(prefix, 5),
+				Config: attachmentConfig(prefix, 0),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
