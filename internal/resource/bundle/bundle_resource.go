@@ -290,8 +290,8 @@ func createdState(ctx context.Context, plan BundleModel, bundle *zenfraclient.Bu
 func (r *BundleResource) writeContentThenSelector(
 	ctx context.Context, contentReq zenfraclient.UpdateBundleContentRequest, bundle *zenfraclient.Bundle, selector []string, diags *diag.Diagnostics,
 ) *zenfraclient.Bundle {
-	// A new bundle is at content_version 0, which the API cannot fence: this
-	// first write is unfenced (see UpdateBundleContentRequest).
+	// A new bundle is at content_version 0; the API fences this first write on
+	// it too (see UpdateBundleContentRequest).
 	contentReq.ExpectedVersion = bundle.ContentVersion
 	contentResp, err := r.client.UpdateBundleContent(ctx, bundle.ID, contentReq)
 	if err != nil {
@@ -458,8 +458,8 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		// Fenced on the version Terraform last saw; unfenced only while the
-		// bundle's content was never written (0, see UpdateBundleContentRequest).
+		// Fenced on the version Terraform last saw, 0 included while the
+		// bundle's content was never written (see UpdateBundleContentRequest).
 		contentReq.ExpectedVersion = state.ContentVersion.ValueInt64()
 
 		contentResp, err := r.client.UpdateBundleContent(ctx, state.ID.ValueString(), contentReq)

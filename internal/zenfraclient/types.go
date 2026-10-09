@@ -316,7 +316,9 @@ type UpdateBundleRequest struct {
 // environment variables and mounted files. Hooks nil leaves the stored hooks
 // unchanged; &Hooks{} clears them. The API also accepts a secret_access list,
 // which it stores but never reads and never returns; this provider does not
-// send it, so a content write stores it empty.
+// send it, and since zenfra-cloud#865 an absent list keeps the stored one.
+// A secret is always sent with its configured value (an empty one is refused
+// before the request), so the API's keep-on-empty rule never applies here.
 type BundleContent struct {
 	EnvironmentVariables []EnvVariable `json:"environment_variables"`
 	MountedFiles         []MountedFile `json:"mounted_files"`
@@ -326,14 +328,12 @@ type BundleContent struct {
 // UpdateBundleContentRequest is the request body for updating bundle content.
 //
 // ExpectedVersion fences the write on content_version: a non-zero value must
-// match or the API answers 409 version_conflict. 0 is omitted, and the API
-// reads 0 (or absent) as "skip the version check", fencing the write only
-// when it keeps the stored hooks (a content without a hooks member). The
-// provider always sends hooks, so a write at 0 is unfenced. That happens on
-// the first content write to a bundle, whose content_version starts at 0:
-// the one Create makes, and an update to a bundle whose content was never
-// written. Every later write carries the content_version from state and is
-// fenced. The API offers no way to fence at 0 over HTTP.
+// match or the API answers 409 version_conflict. 0 is omitted; the API then
+// still fences the write on the version it read whenever the write reuses
+// stored data (zenfra-cloud#865). This provider never sends secret_access, so
+// the API keeps the stored list and every content write is fenced, a write at
+// 0 included: the first content write to a bundle, whose content_version
+// starts at 0, fails with 409 if another writer got there first.
 type UpdateBundleContentRequest struct {
 	Content         any   `json:"content"`
 	ExpectedVersion int64 `json:"expected_version,omitempty"`
