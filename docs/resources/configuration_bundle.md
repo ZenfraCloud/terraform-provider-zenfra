@@ -93,12 +93,12 @@ resource "zenfra_configuration_bundle" "production_guardrails" {
 Required:
 
 - `key` (String) The environment variable name.
-- `value` (String, Sensitive) The environment variable value.
+- `value` (String, Sensitive) The environment variable value. A secret's value must not be empty: it is refused at plan, or at apply when the value is only known then.
 
 Optional:
 
 - `description` (String) Description of this environment variable.
-- `secret` (Boolean) Whether this is a secret value. Secret values are write-only.
+- `secret` (Boolean) Whether this is a secret value. Secret values are write-only: Zenfra never returns them, so the configuration always carries the value.
 
 
 <a id="nestedatt--hooks"></a>
@@ -119,13 +119,13 @@ Optional:
 
 Required:
 
-- `content` (String, Sensitive) The file content.
+- `content` (String, Sensitive) The file content. A secret file's content must not be empty: it is refused at plan, or at apply when the content is only known then.
 - `path` (String) The file path where the content will be mounted.
 
 Optional:
 
 - `description` (String) Description of this mounted file.
-- `secret` (Boolean) Whether this file is secret. Secret files are write-only.
+- `secret` (Boolean) Whether this file is secret. Secret files are write-only: Zenfra never returns their content, so the configuration always carries it.
 
 ## Import
 
