@@ -5,6 +5,7 @@ package bundle
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -26,6 +27,8 @@ var (
 	_ resource.Resource                = &BundleResource{}
 	_ resource.ResourceWithImportState = &BundleResource{}
 	_ resource.ResourceWithModifyPlan  = &BundleResource{}
+
+	_ resource.ResourceWithValidateConfig = &BundleResource{}
 )
 
 // NewBundleResource is a constructor for the bundle resource.
@@ -139,12 +142,12 @@ func (r *BundleResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 							Required:    true,
 						},
 						"value": schema.StringAttribute{
-							Description: "The environment variable value.",
+							Description: "The environment variable value. A secret's value must not be empty: it is refused at plan, or at apply when the value is only known then.",
 							Required:    true,
 							Sensitive:   true,
 						},
 						"secret": schema.BoolAttribute{
-							Description: "Whether this is a secret value. Secret values are write-only.",
+							Description: "Whether this is a secret value. Secret values are write-only: Zenfra never returns them, so the configuration always carries the value.",
 							Optional:    true,
 							Computed:    true,
 							Default:     booldefault.StaticBool(false),
@@ -165,12 +168,12 @@ func (r *BundleResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 							Required:    true,
 						},
 						"content": schema.StringAttribute{
-							Description: "The file content.",
+							Description: "The file content. A secret file's content must not be empty: it is refused at plan, or at apply when the content is only known then.",
 							Required:    true,
 							Sensitive:   true,
 						},
 						"secret": schema.BoolAttribute{
-							Description: "Whether this file is secret. Secret files are write-only.",
+							Description: "Whether this file is secret. Secret files are write-only: Zenfra never returns their content, so the configuration always carries it.",
 							Optional:    true,
 							Computed:    true,
 							Default:     booldefault.StaticBool(false),
@@ -207,6 +210,12 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// Everything that can refuse the content is checked before the first
+	// request: a value that resolved empty at apply leaves no bundle behind.
+	resp.Diagnostics.Append(emptySecretDiags(plan.EnvironmentVariable, plan.MountedFile)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	createReq, diags := buildCreateRequest(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -220,6 +229,13 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	hasEnvVars := !plan.EnvironmentVariable.IsNull() && len(plan.EnvironmentVariable.Elements()) > 0
 	hasFiles := !plan.MountedFile.IsNull() && len(plan.MountedFile.Elements()) > 0
 	hasContent := hasEnvVars || hasFiles || !plan.Hooks.IsNull()
+	var contentReq zenfraclient.UpdateBundleContentRequest
+	if hasContent {
+		contentReq = buildContentRequest(ctx, plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
 	selector := createReq.AutoAttachLabels
 	if hasContent {
 		createReq.AutoAttachLabels = nil
@@ -241,7 +257,7 @@ func (r *BundleResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	if hasContent {
-		bundle = r.writeContentThenSelector(ctx, plan, bundle, selector, &resp.Diagnostics)
+		bundle = r.writeContentThenSelector(ctx, contentReq, bundle, selector, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -272,14 +288,10 @@ func createdState(ctx context.Context, plan BundleModel, bundle *zenfraclient.Bu
 // writeContentThenSelector writes a new bundle's content, then its
 // auto-attach selector, and returns the bundle as it stands afterwards.
 func (r *BundleResource) writeContentThenSelector(
-	ctx context.Context, plan BundleModel, bundle *zenfraclient.Bundle, selector []string, diags *diag.Diagnostics,
+	ctx context.Context, contentReq zenfraclient.UpdateBundleContentRequest, bundle *zenfraclient.Bundle, selector []string, diags *diag.Diagnostics,
 ) *zenfraclient.Bundle {
-	contentReq := buildContentRequest(ctx, plan, diags)
-	if diags.HasError() {
-		return nil
-	}
-	// A new bundle is at content_version 0, which the API cannot fence: this
-	// first write is unfenced (see UpdateBundleContentRequest).
+	// A new bundle is at content_version 0; the API fences this first write on
+	// it too (see UpdateBundleContentRequest).
 	contentReq.ExpectedVersion = bundle.ContentVersion
 	contentResp, err := r.client.UpdateBundleContent(ctx, bundle.ID, contentReq)
 	if err != nil {
@@ -431,6 +443,12 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// Before any request: neither the content nor the metadata is written
+	// when a secret resolved empty at apply.
+	resp.Diagnostics.Append(emptySecretDiags(plan.EnvironmentVariable, plan.MountedFile)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	var bundle *zenfraclient.Bundle
 
@@ -440,8 +458,8 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		// Fenced on the version Terraform last saw; unfenced only while the
-		// bundle's content was never written (0, see UpdateBundleContentRequest).
+		// Fenced on the version Terraform last saw, 0 included while the
+		// bundle's content was never written (see UpdateBundleContentRequest).
 		contentReq.ExpectedVersion = state.ContentVersion.ValueInt64()
 
 		contentResp, err := r.client.UpdateBundleContent(ctx, state.ID.ValueString(), contentReq)
@@ -518,6 +536,54 @@ func (r *BundleResource) Update(ctx context.Context, req resource.UpdateRequest,
 	resp.Diagnostics.Append(mapSelectorAndHooks(ctx, &newState, bundle, plan.AutoAttachLabels)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
+}
+
+// ValidateConfig refuses a secret whose value is known to be empty, at plan
+// time. Unknown values are left to the same check at apply.
+func (r *BundleResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var envVars, files types.Set
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("environment_variable"), &envVars)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("mounted_file"), &files)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(emptySecretDiags(envVars, files)...)
+}
+
+// emptySecretDiags reports each secret = true entry whose value or content is
+// known and empty (zero characters; whitespace is a value). The API never
+// returns a secret's value and keeps a stored one only when it is sent
+// empty on purpose; this provider always sends the configured value, so an
+// empty one is a mistake. Anything unknown is skipped. A diagnostic names the
+// key or path, never a value.
+func emptySecretDiags(envVars, files types.Set) diag.Diagnostics {
+	var diags diag.Diagnostics
+	check := func(set types.Set, block, idAttr, valueAttr string) {
+		if set.IsNull() || set.IsUnknown() {
+			return
+		}
+		for _, elem := range set.Elements() {
+			obj, ok := elem.(types.Object)
+			if !ok || obj.IsNull() || obj.IsUnknown() {
+				continue
+			}
+			attrs := obj.Attributes()
+			secret, _ := attrs["secret"].(types.Bool)
+			value, _ := attrs[valueAttr].(types.String)
+			if secret.IsUnknown() || !secret.ValueBool() || value.IsNull() || value.IsUnknown() || value.ValueString() != "" {
+				continue
+			}
+			name := "with an unknown " + idAttr
+			if id, _ := attrs[idAttr].(types.String); !id.IsNull() && !id.IsUnknown() {
+				name = strconv.Quote(id.ValueString())
+			}
+			diags.AddAttributeError(path.Root(block), "Secret Without a Value",
+				fmt.Sprintf("The %s %s is secret and its %s is empty. A secret must carry its %s.", block, name, valueAttr, valueAttr))
+		}
+	}
+	check(envVars, "environment_variable", "key", "value")
+	check(files, "mounted_file", "path", "content")
+	return diags
 }
 
 // ModifyPlan marks content_version unknown when the plan writes new content:
