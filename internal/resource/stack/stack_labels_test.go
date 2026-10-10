@@ -228,8 +228,15 @@ func TestCreate_SendsLabels(t *testing.T) {
 	if d := plan.Set(ctx, planned); d.HasError() {
 		t.Fatal(d)
 	}
+	// Create reads state_management from the configuration, where it is omitted.
+	configured := *planned
+	configured.StateManagement = types.StringNull()
+	config := tfsdk.Plan{Schema: schemaResp.Schema}
+	if d := config.Set(ctx, &configured); d.HasError() {
+		t.Fatal(d)
+	}
 	resp := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
-	r.Create(ctx, resource.CreateRequest{Plan: plan}, &resp)
+	r.Create(ctx, resource.CreateRequest{Plan: plan, Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: config.Raw}}, &resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Create: %v", resp.Diagnostics)
 	}
