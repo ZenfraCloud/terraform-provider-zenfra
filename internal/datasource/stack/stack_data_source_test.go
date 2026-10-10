@@ -70,21 +70,21 @@ func TestStackDataSource_Labels(t *testing.T) {
 
 func TestDataSource_StateManagement(t *testing.T) {
 	// A control plane older than the feature omits the block; it reads as managed.
-	if got, _ := mapStackToDataSource(&zenfraclient.Stack{ID: "s1"}); got.StateManagement.ValueString() != "managed" {
+	if got, _ := mapStackToDataSource(&zenfraclient.Stack{ID: "s1"}); got.StateManagement.ValueString() != zenfraclient.StateModeManaged {
 		t.Errorf("nil block = %q, want managed", got.StateManagement.ValueString())
 	}
-	external := &zenfraclient.Stack{ID: "s1", StateManagement: &zenfraclient.StateManagement{Mode: "external"}}
-	if got, _ := mapStackToDataSource(external); got.StateManagement.ValueString() != "external" {
+	external := &zenfraclient.Stack{ID: "s1", StateManagement: &zenfraclient.StateManagement{Mode: zenfraclient.StateModeExternal}}
+	if got, _ := mapStackToDataSource(external); got.StateManagement.ValueString() != zenfraclient.StateModeExternal {
 		t.Error("an external stack must read as external")
 	}
 }
 
 func TestListItem_StateManagement(t *testing.T) {
-	if got, _ := mapStackToListItem(&zenfraclient.Stack{ID: "s1"}); got.StateManagement.ValueString() != "managed" {
+	if got, _ := mapStackToListItem(&zenfraclient.Stack{ID: "s1"}); got.StateManagement.ValueString() != zenfraclient.StateModeManaged {
 		t.Errorf("nil block = %q, want managed", got.StateManagement.ValueString())
 	}
-	external := &zenfraclient.Stack{ID: "s1", StateManagement: &zenfraclient.StateManagement{Mode: "external"}}
-	if got, _ := mapStackToListItem(external); got.StateManagement.ValueString() != "external" {
+	external := &zenfraclient.Stack{ID: "s1", StateManagement: &zenfraclient.StateManagement{Mode: zenfraclient.StateModeExternal}}
+	if got, _ := mapStackToListItem(external); got.StateManagement.ValueString() != zenfraclient.StateModeExternal {
 		t.Error("an external stack must read as external in the list")
 	}
 }

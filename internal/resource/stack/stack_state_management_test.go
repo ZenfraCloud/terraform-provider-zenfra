@@ -19,6 +19,13 @@ import (
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
+// Fixture values shared by the API stack and the plan model below.
+const (
+	testEngine  = "terraform"
+	testRefType = "branch"
+	testRefName = "main"
+)
+
 // nonNullRaw is any non-null object; the guard only checks null-ness of the raw
 // plan and state to tell creation and destroy apart.
 func nonNullRaw() tftypes.Value {
@@ -46,8 +53,8 @@ func runGuard(t *testing.T, rawState, rawPlan tftypes.Value, state, config types
 
 func TestStateManagementGuard_RefusesBothTransitions(t *testing.T) {
 	for name, tc := range map[string]struct{ from, to string }{
-		"managed to external": {"managed", "external"},
-		"external to managed": {"external", "managed"},
+		"managed to external": {zenfraclient.StateModeManaged, zenfraclient.StateModeExternal},
+		"external to managed": {zenfraclient.StateModeExternal, zenfraclient.StateModeManaged},
 	} {
 		t.Run(name, func(t *testing.T) {
 			resp := runGuard(t, nonNullRaw(), nonNullRaw(),
@@ -70,12 +77,12 @@ func TestStateManagementGuard_RefusesBothTransitions(t *testing.T) {
 // managed - external did not exist yet - so an explicit external must still be
 // refused, not waved through because the prior attribute happens to be null.
 func TestStateManagementGuard_RefusesExternalAgainstPreFeatureState(t *testing.T) {
-	resp := runGuard(t, nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringValue("external"))
+	resp := runGuard(t, nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringValue(zenfraclient.StateModeExternal))
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("a pre-feature stack is managed and must not be changed to external in place")
 	}
 	detail := resp.Diagnostics.Errors()[0].Detail()
-	for _, want := range []string{"managed", "external"} {
+	for _, want := range []string{zenfraclient.StateModeManaged, zenfraclient.StateModeExternal} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("error must mention %q, got: %s", want, detail)
 		}
@@ -88,14 +95,14 @@ func TestStateManagementGuard_AllowsEverythingElse(t *testing.T) {
 		state, config     types.String
 	}{
 		// Creation: no prior state to compare against, and taint reaches us this way too.
-		"create":         {nullRaw(), nonNullRaw(), types.StringNull(), types.StringValue("external")},
-		"destroy":        {nonNullRaw(), nullRaw(), types.StringValue("external"), types.StringNull()},
-		"unchanged":      {nonNullRaw(), nonNullRaw(), types.StringValue("external"), types.StringValue("external")},
-		"omitted config": {nonNullRaw(), nonNullRaw(), types.StringValue("external"), types.StringNull()},
-		"unknown config": {nonNullRaw(), nonNullRaw(), types.StringValue("external"), types.StringUnknown()},
+		"create":         {nullRaw(), nonNullRaw(), types.StringNull(), types.StringValue(zenfraclient.StateModeExternal)},
+		"destroy":        {nonNullRaw(), nullRaw(), types.StringValue(zenfraclient.StateModeExternal), types.StringNull()},
+		"unchanged":      {nonNullRaw(), nonNullRaw(), types.StringValue(zenfraclient.StateModeExternal), types.StringValue(zenfraclient.StateModeExternal)},
+		"omitted config": {nonNullRaw(), nonNullRaw(), types.StringValue(zenfraclient.StateModeExternal), types.StringNull()},
+		"unknown config": {nonNullRaw(), nonNullRaw(), types.StringValue(zenfraclient.StateModeExternal), types.StringUnknown()},
 		// A pre-feature stack is managed, so asking for managed is not a change.
 		"pre-feature state, managed configured": {
-			nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringValue("managed"),
+			nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringValue(zenfraclient.StateModeManaged),
 		},
 		"pre-feature state, omitted config": {
 			nonNullRaw(), nonNullRaw(), types.StringNull(), types.StringNull(),
@@ -112,7 +119,7 @@ func TestStateManagementGuard_AllowsEverythingElse(t *testing.T) {
 
 func TestStateManagementValidator(t *testing.T) {
 	at := path.Root("state_management")
-	for _, mode := range []string{"managed", "external"} {
+	for _, mode := range []string{zenfraclient.StateModeManaged, zenfraclient.StateModeExternal} {
 		if diags := validateMode(at, types.StringValue(mode)); diags.HasError() {
 			t.Errorf("%q must be accepted", mode)
 		}
@@ -178,12 +185,12 @@ func createdStack(mode string) *zenfraclient.Stack {
 		Name:            "my-stack",
 		AllowPublicPool: true,
 		StateManagement: &zenfraclient.StateManagement{Mode: mode},
-		IAC:             zenfraclient.IACConfig{Engine: "terraform", Version: "1.9.0"},
+		IAC:             zenfraclient.IACConfig{Engine: testEngine, Version: "1.9.0"},
 		Source: zenfraclient.StackSource{
 			Type: "raw_git",
 			RawGit: &zenfraclient.StackSourceRawGit{
 				URL:  "https://example.com/repo.git",
-				Ref:  zenfraclient.StackSourceRef{Type: "branch", Name: "main"},
+				Ref:  zenfraclient.StackSourceRef{Type: testRefType, Name: testRefName},
 				Path: ".",
 			},
 		},
@@ -198,9 +205,9 @@ func TestCreate_RequestedMode(t *testing.T) {
 	}{
 		// Omitted config is unknown in the create PLAN, so Create reads the CONFIG,
 		// where an omitted attribute is null and means "let the server default".
-		"omitted":  {types.StringNull(), nil},
-		"managed":  {types.StringValue("managed"), &zenfraclient.StateManagement{Mode: "managed"}},
-		"external": {types.StringValue("external"), &zenfraclient.StateManagement{Mode: "external"}},
+		"omitted":                      {types.StringNull(), nil},
+		zenfraclient.StateModeManaged:  {types.StringValue(zenfraclient.StateModeManaged), &zenfraclient.StateManagement{Mode: zenfraclient.StateModeManaged}},
+		zenfraclient.StateModeExternal: {types.StringValue(zenfraclient.StateModeExternal), &zenfraclient.StateManagement{Mode: zenfraclient.StateModeExternal}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, diags := stateManagementForCreate(at, tc.config)
@@ -235,7 +242,7 @@ func TestCreate_OldControlPlaneOmittingTheField(t *testing.T) {
 	// External requested, server returns no block at all: the field was dropped
 	// by binding on a control plane older than the feature.
 	fake := &fakeStackClient{created: &zenfraclient.Stack{ID: "s1"}}
-	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", "external", nil)
+	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", zenfraclient.StateModeExternal, nil)
 
 	if outcome != cleanupSucceeded {
 		t.Errorf("outcome = %v, want cleanupSucceeded", outcome)
@@ -254,8 +261,8 @@ func TestCreate_OldControlPlaneOmittingTheField(t *testing.T) {
 
 func TestCreate_WrongModeReturned(t *testing.T) {
 	fake := &fakeStackClient{}
-	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", "external",
-		&zenfraclient.StateManagement{Mode: "managed"})
+	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", zenfraclient.StateModeExternal,
+		&zenfraclient.StateManagement{Mode: zenfraclient.StateModeManaged})
 
 	if outcome != cleanupSucceeded {
 		t.Errorf("outcome = %v, want cleanupSucceeded", outcome)
@@ -274,7 +281,7 @@ func TestCreate_WrongModeReturned(t *testing.T) {
 func TestCreate_OmittedAndManagedAgainstOldControlPlane(t *testing.T) {
 	// nil means managed under the effective-mode contract, so this is not an error.
 	fake := &fakeStackClient{}
-	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", "managed", nil)
+	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", zenfraclient.StateModeManaged, nil)
 	if diags.HasError() {
 		t.Errorf("managed requested and nil returned is consistent: %v", diags)
 	}
@@ -288,8 +295,8 @@ func TestCreate_OmittedAndManagedAgainstOldControlPlane(t *testing.T) {
 
 func TestCreate_CleanupFailureKeepsState(t *testing.T) {
 	fake := &fakeStackClient{deleteErr: errors.New("boom")}
-	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", "external",
-		&zenfraclient.StateManagement{Mode: "managed"})
+	outcome, diags := verifyCreatedMode(context.Background(), fake, "s1", zenfraclient.StateModeExternal,
+		&zenfraclient.StateManagement{Mode: zenfraclient.StateModeManaged})
 
 	if outcome != cleanupFailed {
 		t.Fatalf("outcome = %v, want cleanupFailed; Create keys state retention off this", outcome)
@@ -327,12 +334,12 @@ func stackCreateValues(t *testing.T, configured types.String) (tfsdk.Plan, tfsdk
 	s := stackTestSchema(t)
 
 	iac, d := types.ObjectValueFrom(ctx, IACModelAttrTypes,
-		&IACModel{Engine: types.StringValue("terraform"), Version: types.StringValue("1.9.0")})
+		&IACModel{Engine: types.StringValue(testEngine), Version: types.StringValue("1.9.0")})
 	if d.HasError() {
 		t.Fatalf("iac: %v", d)
 	}
 	ref, d := types.ObjectValueFrom(ctx, RefModelAttrTypes,
-		&RefModel{Type: types.StringValue("branch"), Name: types.StringValue("main")})
+		&RefModel{Type: types.StringValue(testRefType), Name: types.StringValue(testRefName)})
 	if d.HasError() {
 		t.Fatalf("ref: %v", d)
 	}
@@ -415,8 +422,8 @@ func TestCreate_UnknownModeCreatesNothing(t *testing.T) {
 }
 
 func TestCreate_CleanupSuccessSetsNoState(t *testing.T) {
-	fake := &fakeStackClient{created: createdStack("managed")}
-	resp := runCreate(t, fake, types.StringValue("external"))
+	fake := &fakeStackClient{created: createdStack(zenfraclient.StateModeManaged)}
+	resp := runCreate(t, fake, types.StringValue(zenfraclient.StateModeExternal))
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("a wrong returned mode must fail the create")
@@ -430,8 +437,8 @@ func TestCreate_CleanupSuccessSetsNoState(t *testing.T) {
 }
 
 func TestCreate_CleanupFailureSetsReturnedMode(t *testing.T) {
-	fake := &fakeStackClient{created: createdStack("managed"), deleteErr: errors.New("boom")}
-	resp := runCreate(t, fake, types.StringValue("external"))
+	fake := &fakeStackClient{created: createdStack(zenfraclient.StateModeManaged), deleteErr: errors.New("boom")}
+	resp := runCreate(t, fake, types.StringValue(zenfraclient.StateModeExternal))
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("a wrong returned mode must fail the create")
@@ -446,7 +453,7 @@ func TestCreate_CleanupFailureSetsReturnedMode(t *testing.T) {
 	if got.ID.ValueString() != "s1" {
 		t.Errorf("id = %q, want s1 so the orphan can be destroyed", got.ID.ValueString())
 	}
-	if got.StateManagement.ValueString() != "managed" {
+	if got.StateManagement.ValueString() != zenfraclient.StateModeManaged {
 		t.Errorf("state_management = %q, want the mode the server actually returned",
 			got.StateManagement.ValueString())
 	}
@@ -454,8 +461,8 @@ func TestCreate_CleanupFailureSetsReturnedMode(t *testing.T) {
 
 // The requested mode really does reach the wire.
 func TestCreate_SendsRequestedModeAndKeepsState(t *testing.T) {
-	fake := &fakeStackClient{created: createdStack("external")}
-	resp := runCreate(t, fake, types.StringValue("external"))
+	fake := &fakeStackClient{created: createdStack(zenfraclient.StateModeExternal)}
+	resp := runCreate(t, fake, types.StringValue(zenfraclient.StateModeExternal))
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("a matching mode must succeed: %v", resp.Diagnostics)
@@ -464,7 +471,7 @@ func TestCreate_SendsRequestedModeAndKeepsState(t *testing.T) {
 		t.Fatalf("CreateStack called %d times, want 1", len(fake.createReqs))
 	}
 	sm := fake.createReqs[0].StateManagement
-	if sm == nil || sm.Mode != "external" {
+	if sm == nil || sm.Mode != zenfraclient.StateModeExternal {
 		t.Errorf("request carried %+v, want mode external", sm)
 	}
 	if fake.deleted != "" {
