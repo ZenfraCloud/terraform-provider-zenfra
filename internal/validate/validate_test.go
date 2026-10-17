@@ -1,4 +1,4 @@
-// ABOUTME: Unit tests for the label and hook validators.
+// ABOUTME: Unit tests for the label, hook and non-empty set validators.
 // ABOUTME: Pins the API's label and hook contract as the provider enforces it at plan time.
 package validate
 
@@ -260,6 +260,34 @@ func TestNonNegative(t *testing.T) {
 			resp := &validator.Int64Response{}
 			NonNegative().ValidateInt64(context.Background(), validator.Int64Request{
 				Path:        path.Root("priority"),
+				ConfigValue: tt.value,
+			}, resp)
+			if got := resp.Diagnostics.HasError(); got != tt.wantError {
+				t.Errorf("HasError = %v, want %v: %v", got, tt.wantError, resp.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestNonEmptySet(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		value     types.Set
+		wantError bool
+	}{
+		{name: "null", value: types.SetNull(types.StringType)},
+		{name: "unknown", value: types.SetUnknown(types.StringType)},
+		{name: "empty", value: stringSet(t), wantError: true},
+		{name: "one", value: stringSet(t, "run.failed")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			resp := &validator.SetResponse{}
+			NonEmptySet().ValidateSet(context.Background(), validator.SetRequest{
+				Path:        path.Root("event_types"),
 				ConfigValue: tt.value,
 			}, resp)
 			if got := resp.Diagnostics.HasError(); got != tt.wantError {

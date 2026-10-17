@@ -31,6 +31,7 @@ internal/
     stack/
     stack_variables/
     vcs_integration/
+    webhook_endpoint/
     worker_pool/
   datasource/                     # Data sources (read-only)
     current_organization/
@@ -57,6 +58,7 @@ examples/provider/main.tf         # Example usage
 | `zenfra_stack_variables` | Replace-all semantics (PUT replaces entire list) |
 | `zenfra_api_token` | Write-once `token` value, role-based, expiration |
 | `zenfra_vcs_integration` | GitHub (installation_id) or GitLab (base_url + token) |
+| `zenfra_webhook_endpoint` | Write-once `secret` (create response only, null after import); `enabled = true` re-enables an auto-disabled endpoint |
 
 ### Data Sources (6)
 `zenfra_space`, `zenfra_stack`, `zenfra_stacks` (list), `zenfra_worker_pool`, `zenfra_worker_pools` (list), `zenfra_current_organization`
@@ -77,7 +79,7 @@ Each resource follows: `{type}_resource.go` (CRUD + ImportState) + `{type}_model
 All resources implement `resource.ResourceWithImportState` for `terraform import` support.
 
 ### Write-Once Secrets
-API tokens and worker pool keys are `Computed: true, Sensitive: true` — only returned on creation, never re-readable.
+API tokens, worker pool keys and webhook endpoint secrets are `Computed: true, Sensitive: true` — only returned on creation, never re-readable.
 
 ### Client ↔ API Contract
 `zenfraclient/types.go` DTOs must match `zenfra-api` handler request/response structs. When API DTOs change, update types.go accordingly.
