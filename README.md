@@ -28,6 +28,7 @@ provider "zenfra" {
 - `zenfra_stack_variables` — environment variables on a stack
 - `zenfra_api_token` — API token management
 - `zenfra_vcs_integration` — GitHub or GitLab integration
+- `zenfra_webhook_endpoint` — outbound webhook endpoint for run events
 
 ## Data Sources
 

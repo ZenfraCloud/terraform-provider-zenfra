@@ -1084,3 +1084,99 @@ func TestListStacks_Envelope(t *testing.T) {
 		t.Errorf("stack-2 omits the block, so it must read as managed")
 	}
 }
+
+func TestCRUD_WebhookEndpoint(t *testing.T) {
+	t.Parallel()
+
+	const id = "6630f0c2a1b2c3d4e5f60718"
+	endpointJSON := `"id":"` + id + `","url":"https://hooks.example.com/z","description":"",` +
+		`"event_types":["run.failed"],"enabled":false,"disabled_reason":"auto_failures",` +
+		`"disabled_at":"2026-10-17T09:00:00Z","health":{"consecutive_failures":12,"last_status_code":500,` +
+		`"last_error_class":"http_status"},"created_at":"2026-10-17T08:00:00Z","updated_at":"2026-10-17T09:00:00Z"`
+	var gotCreate, gotPatch string
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/webhook-endpoints", func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		gotCreate = string(raw)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{` + endpointJSON + `,"secret":"whsec_shown_once"}`))
+	})
+	mux.HandleFunc("GET /api/v1/webhook-endpoints/"+id, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{` + endpointJSON + `}`))
+	})
+	mux.HandleFunc("PATCH /api/v1/webhook-endpoints/"+id, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		gotPatch = string(raw)
+		_, _ = w.Write([]byte(`{` + endpointJSON + `}`))
+	})
+	mux.HandleFunc("DELETE /api/v1/webhook-endpoints/"+id, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	client := newTestClient(t, server)
+	ctx := context.Background()
+
+	created, err := client.CreateWebhookEndpoint(ctx, CreateWebhookEndpointRequest{
+		URL: "https://hooks.example.com/z", EventTypes: []string{"run.failed"},
+	})
+	if err != nil {
+		t.Fatalf("CreateWebhookEndpoint: %v", err)
+	}
+	if gotCreate != `{"url":"https://hooks.example.com/z","event_types":["run.failed"]}` {
+		t.Errorf("create body = %s, want no description and no enabled when unset", gotCreate)
+	}
+	if created.Secret != "whsec_shown_once" || created.ID != id {
+		t.Errorf("created = %+v", created)
+	}
+
+	ep, err := client.GetWebhookEndpoint(ctx, id)
+	if err != nil {
+		t.Fatalf("GetWebhookEndpoint: %v", err)
+	}
+	if ep.Enabled || ep.DisabledReason != "auto_failures" || ep.DisabledAt == nil ||
+		ep.Health.ConsecutiveFailures != 12 || ep.Health.LastStatusCode != 500 {
+		t.Errorf("endpoint = %+v", ep)
+	}
+
+	enabled := true
+	if _, err := client.PatchWebhookEndpoint(ctx, id, PatchWebhookEndpointRequest{Enabled: &enabled}); err != nil {
+		t.Fatalf("PatchWebhookEndpoint: %v", err)
+	}
+	if gotPatch != `{"enabled":true}` {
+		t.Errorf("patch body = %s, want only enabled", gotPatch)
+	}
+
+	if err := client.DeleteWebhookEndpoint(ctx, id); err != nil {
+		t.Fatalf("DeleteWebhookEndpoint: %v", err)
+	}
+	if _, err := client.GetWebhookEndpoint(ctx, "missing"); !IsNotFound(err) {
+		t.Errorf("missing endpoint: err = %v, want not found", err)
+	}
+}
+
+// A create the API committed but answered with a 503 (or whose response was
+// lost) must not be replayed: a second POST would make a second endpoint and
+// take a second quota slot.
+func TestCreateWebhookEndpoint_IsNotRetried(t *testing.T) {
+	t.Parallel()
+
+	var posts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts.Add(1) // the endpoint is persisted, then the answer is lost
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	_, err := newTestClient(t, server).CreateWebhookEndpoint(context.Background(), CreateWebhookEndpointRequest{
+		URL: "https://hooks.example.com/z", EventTypes: []string{"run.failed"},
+	})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got := posts.Load(); got != 1 {
+		t.Fatalf("create sent %d POSTs, want exactly 1", got)
+	}
+}

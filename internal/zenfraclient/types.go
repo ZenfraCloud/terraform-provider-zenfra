@@ -620,6 +620,64 @@ type AttachCloudIntegrationRequest struct {
 	Write   bool   `json:"write"`
 }
 
+// --- Webhook endpoint types ---
+
+// Webhook endpoint disabled reasons, as the API reports them in disabled_reason.
+const (
+	WebhookDisabledManual       = "manual"
+	WebhookDisabledAutoFailures = "auto_failures"
+)
+
+// WebhookEndpointHealth is an endpoint's delivery health.
+type WebhookEndpointHealth struct {
+	ConsecutiveFailures int        `json:"consecutive_failures"`
+	FailingSince        *time.Time `json:"failing_since,omitempty"`
+	LastAttemptAt       *time.Time `json:"last_attempt_at,omitempty"`
+	LastSuccessAt       *time.Time `json:"last_success_at,omitempty"`
+	LastStatusCode      int        `json:"last_status_code,omitempty"`
+	LastErrorClass      string     `json:"last_error_class,omitempty"`
+}
+
+// WebhookEndpoint is an outbound webhook endpoint. The signing secret is never
+// part of it: the API shows it only in the create (and rotate) response.
+type WebhookEndpoint struct {
+	ID          string   `json:"id"`
+	URL         string   `json:"url"`
+	Description string   `json:"description"`
+	EventTypes  []string `json:"event_types"`
+	Enabled     bool     `json:"enabled"`
+	// DisabledReason is "manual" or "auto_failures", empty when enabled.
+	DisabledReason string                `json:"disabled_reason,omitempty"`
+	DisabledAt     *time.Time            `json:"disabled_at,omitempty"`
+	Health         WebhookEndpointHealth `json:"health"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
+}
+
+// CreateWebhookEndpointRequest is the body of POST /api/v1/webhook-endpoints.
+type CreateWebhookEndpointRequest struct {
+	URL         string   `json:"url"`
+	Description string   `json:"description,omitempty"`
+	EventTypes  []string `json:"event_types"`
+	Enabled     *bool    `json:"enabled,omitempty"` // nil = enabled
+}
+
+// CreateWebhookEndpointResponse is the create response: the endpoint plus its
+// signing secret, the only time the secret is returned.
+type CreateWebhookEndpointResponse struct {
+	WebhookEndpoint
+	Secret string `json:"secret"`
+}
+
+// PatchWebhookEndpointRequest is the leaf patch of PATCH
+// /api/v1/webhook-endpoints/:id: a nil field is left unchanged.
+type PatchWebhookEndpointRequest struct {
+	URL         *string   `json:"url,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	EventTypes  *[]string `json:"event_types,omitempty"`
+	Enabled     *bool     `json:"enabled,omitempty"`
+}
+
 // --- Paginated response wrapper ---
 
 // PaginatedResponse wraps paginated list responses from the API.

@@ -27,6 +27,7 @@ import (
 	resStack "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack"
 	resStackVars "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack_variables"
 	resVCS "github.com/zenfra/terraform-provider-zenfra/internal/resource/vcs_integration"
+	resWebhook "github.com/zenfra/terraform-provider-zenfra/internal/resource/webhook_endpoint"
 	resWorkerPool "github.com/zenfra/terraform-provider-zenfra/internal/resource/worker_pool"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
@@ -135,6 +136,7 @@ func (p *ZenfraProvider) Resources(_ context.Context) []func() resource.Resource
 		resStackVars.NewStackVariablesResource,
 		resAPIToken.NewAPITokenResource,
 		resVCS.NewVCSIntegrationResource,
+		resWebhook.NewWebhookEndpointResource,
 	}
 }
 
