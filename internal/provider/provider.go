@@ -24,8 +24,11 @@ import (
 	resBundleAttachment "github.com/zenfra/terraform-provider-zenfra/internal/resource/bundle_attachment"
 	resCloudAttachment "github.com/zenfra/terraform-provider-zenfra/internal/resource/cloud_integration_attachment"
 	resSpace "github.com/zenfra/terraform-provider-zenfra/internal/resource/space"
+	resSpaceGrant "github.com/zenfra/terraform-provider-zenfra/internal/resource/space_grant"
 	resStack "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack"
 	resStackVars "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack_variables"
+	resTeam "github.com/zenfra/terraform-provider-zenfra/internal/resource/team"
+	resTeamMembership "github.com/zenfra/terraform-provider-zenfra/internal/resource/team_membership"
 	resVCS "github.com/zenfra/terraform-provider-zenfra/internal/resource/vcs_integration"
 	resWebhook "github.com/zenfra/terraform-provider-zenfra/internal/resource/webhook_endpoint"
 	resWorkerPool "github.com/zenfra/terraform-provider-zenfra/internal/resource/worker_pool"
@@ -137,6 +140,9 @@ func (p *ZenfraProvider) Resources(_ context.Context) []func() resource.Resource
 		resAPIToken.NewAPITokenResource,
 		resVCS.NewVCSIntegrationResource,
 		resWebhook.NewWebhookEndpointResource,
+		resTeam.NewTeamResource,
+		resTeamMembership.NewTeamMembershipResource,
+		resSpaceGrant.NewSpaceGrantResource,
 	}
 }
 

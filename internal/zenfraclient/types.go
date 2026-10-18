@@ -687,3 +687,66 @@ type PaginatedResponse[T any] struct {
 	Limit  int   `json:"limit"`
 	Offset int   `json:"offset"`
 }
+
+// --- Teams and space grants (zenfra-cloud#953) ---
+
+// Team is a group of users that space grants are given to.
+type Team struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CreateTeamRequest is the body of POST /api/v1/teams.
+type CreateTeamRequest struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description,omitempty"`
+}
+
+// UpdateTeamRequest is the body of PATCH /api/v1/teams/:team_id; nil fields
+// are unchanged. The slug cannot change.
+type UpdateTeamRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// TeamMember is one member of a team.
+type TeamMember struct {
+	TeamID    string    `json:"team_id"`
+	UserID    string    `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TeamMemberList is the body of GET /api/v1/teams/:team_id/members.
+type TeamMemberList struct {
+	Members []TeamMember `json:"members"`
+}
+
+// AddTeamMemberRequest is the body of POST /api/v1/teams/:team_id/members.
+type AddTeamMemberRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// SpaceGrant is a team's role (read or write) on a space and every space below it.
+type SpaceGrant struct {
+	SpaceID   string    `json:"space_id"`
+	TeamID    string    `json:"team_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CreateSpaceGrantRequest is the body of POST /api/v1/spaces/:space_id/grants.
+type CreateSpaceGrantRequest struct {
+	TeamID string `json:"team_id"`
+	Role   string `json:"role"`
+}
+
+// UpdateSpaceGrantRequest is the body of PATCH /api/v1/spaces/:space_id/grants/:team_id.
+type UpdateSpaceGrantRequest struct {
+	Role string `json:"role"`
+}

@@ -296,3 +296,35 @@ func TestNonEmptySet(t *testing.T) {
 		})
 	}
 }
+
+func TestTeamSlugAndName(t *testing.T) {
+	check := func(v validator.String, s string) bool {
+		resp := validator.StringResponse{}
+		v.ValidateString(context.Background(), validator.StringRequest{Path: path.Root("x"), ConfigValue: types.StringValue(s)}, &resp)
+		return !resp.Diagnostics.HasError()
+	}
+	for s, want := range map[string]bool{
+		"platform": true, "ops-1": true, "a": true, strings.Repeat("a", 64): true,
+		"Platform": false, " platform": false, "platform ": false, "-a": false, "a-": false, "a_b": false, "": false,
+		strings.Repeat("a", 65): false,
+	} {
+		if got := check(TeamSlug(), s); got != want {
+			t.Errorf("TeamSlug(%q) = %v, want %v", s, got, want)
+		}
+	}
+	for s, want := range map[string]bool{
+		"Platform": true, "Platform Ops": true, strings.Repeat("n", 128): true,
+		"": false, " ": false, " Platform": false, "Platform\n": false, strings.Repeat("n", 129): false,
+	} {
+		if got := check(TeamName(), s); got != want {
+			t.Errorf("TeamName(%q) = %v, want %v", s, got, want)
+		}
+	}
+	for _, v := range []validator.String{TeamSlug(), TeamName()} {
+		resp := validator.StringResponse{}
+		v.ValidateString(context.Background(), validator.StringRequest{Path: path.Root("x"), ConfigValue: types.StringUnknown()}, &resp)
+		if resp.Diagnostics.HasError() {
+			t.Error("an unknown value is checked once known, not refused")
+		}
+	}
+}
