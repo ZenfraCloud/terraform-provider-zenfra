@@ -32,6 +32,9 @@ internal/
     stack_variables/
     vcs_integration/
     webhook_endpoint/
+    team/
+    team_membership/
+    space_grant/
     worker_pool/
   datasource/                     # Data sources (read-only)
     current_organization/
@@ -47,7 +50,7 @@ internal/
 examples/provider/main.tf         # Example usage
 ```
 
-### Resources (8)
+### Resources (13)
 | Resource | Key Notes |
 |----------|-----------|
 | `zenfra_space` | Hierarchical (parent_id), bundle inheritance |
@@ -59,6 +62,9 @@ examples/provider/main.tf         # Example usage
 | `zenfra_api_token` | Write-once `token` value, role-based, expiration |
 | `zenfra_vcs_integration` | GitHub (installation_id) or GitLab (base_url + token) |
 | `zenfra_webhook_endpoint` | Write-once `secret` (create response only, null after import); `enabled = true` re-enables an auto-disabled endpoint |
+| `zenfra_team` | `slug` forces replacement; writes need the access-boundary activation (409 `access_boundaries_inactive` before it) |
+| `zenfra_team_membership` | `team_id`, `user_id` force replacement; read through the team's member list; import `team_id/user_id` |
+| `zenfra_space_grant` | `space_id`, `team_id` force replacement, `role` (read/write) in place; import `space_id/team_id` |
 
 ### Data Sources (6)
 `zenfra_space`, `zenfra_stack`, `zenfra_stacks` (list), `zenfra_worker_pool`, `zenfra_worker_pools` (list), `zenfra_current_organization`

@@ -29,6 +29,9 @@ provider "zenfra" {
 - `zenfra_api_token` — API token management
 - `zenfra_vcs_integration` — GitHub or GitLab integration
 - `zenfra_webhook_endpoint` — outbound webhook endpoint for run events
+- `zenfra_team` — a group of users that space grants are given to (after the access-boundary activation)
+- `zenfra_team_membership` — one user in one team
+- `zenfra_space_grant` — a team's read or write on a space and every space below it
 
 ## Data Sources
 
