@@ -16,6 +16,7 @@ type vcsIntegrationDataSourceModel struct {
 	Status         types.String `tfsdk:"status"`
 	InstallationID types.Int64  `tfsdk:"installation_id"`
 	APIURL         types.String `tfsdk:"api_url"`
+	SpaceID        types.String `tfsdk:"space_id"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
 }
@@ -33,6 +34,7 @@ type vcsIntegrationListItemModel struct {
 	OrganizationID types.String `tfsdk:"organization_id"`
 	ProviderType   types.String `tfsdk:"provider_type"`
 	Status         types.String `tfsdk:"status"`
+	SpaceID        types.String `tfsdk:"space_id"`
 }
 
 // mapVCSIntegrationToDataSource converts an API VCSIntegration to the singular data source model.
@@ -43,6 +45,7 @@ func mapVCSIntegrationToDataSource(vcs *zenfraclient.VCSIntegration) vcsIntegrat
 		Name:           types.StringValue(vcs.DisplayName),
 		ProviderType:   types.StringValue(vcs.Provider),
 		Status:         types.StringValue(vcs.Status),
+		SpaceID:        types.StringPointerValue(vcs.SpaceID),
 		CreatedAt:      types.StringValue(vcs.CreatedAt),
 		UpdatedAt:      types.StringValue(vcs.UpdatedAt),
 	}
@@ -60,4 +63,16 @@ func mapVCSIntegrationToDataSource(vcs *zenfraclient.VCSIntegration) vcsIntegrat
 	}
 
 	return model
+}
+
+// mapVCSIntegrationToListItem converts an API VCSIntegration to an item of the plural data source.
+func mapVCSIntegrationToListItem(vcs *zenfraclient.VCSIntegration) vcsIntegrationListItemModel {
+	return vcsIntegrationListItemModel{
+		ID:             types.StringValue(vcs.ID),
+		Name:           types.StringValue(vcs.DisplayName),
+		OrganizationID: types.StringValue(vcs.OrganizationID),
+		ProviderType:   types.StringValue(vcs.Provider),
+		Status:         types.StringValue(vcs.Status),
+		SpaceID:        types.StringPointerValue(vcs.SpaceID),
+	}
 }

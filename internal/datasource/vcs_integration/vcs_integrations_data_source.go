@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/zenfra/terraform-provider-zenfra/internal/zenfraclient"
 )
 
@@ -60,6 +59,10 @@ func (d *vcsIntegrationsDataSource) Schema(_ context.Context, _ datasource.Schem
 							MarkdownDescription: "The current status of the integration.",
 							Computed:            true,
 						},
+						"space_id": schema.StringAttribute{
+							MarkdownDescription: "The space the integration is scoped to (usable only by stacks in that space or a descendant space). Null for an organization-wide integration.",
+							Computed:            true,
+						},
 					},
 				},
 			},
@@ -107,13 +110,7 @@ func (d *vcsIntegrationsDataSource) Read(ctx context.Context, req datasource.Rea
 		if filterProvider != "" && integrations[i].Provider != filterProvider {
 			continue
 		}
-		data.Integrations = append(data.Integrations, vcsIntegrationListItemModel{
-			ID:             types.StringValue(integrations[i].ID),
-			Name:           types.StringValue(integrations[i].DisplayName),
-			OrganizationID: types.StringValue(integrations[i].OrganizationID),
-			ProviderType:   types.StringValue(integrations[i].Provider),
-			Status:         types.StringValue(integrations[i].Status),
-		})
+		data.Integrations = append(data.Integrations, mapVCSIntegrationToListItem(&integrations[i]))
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

@@ -97,3 +97,14 @@ func TestFilterVCSIntegrations(t *testing.T) {
 		})
 	}
 }
+
+func TestMapVCSIntegrationToListItem_SpaceID(t *testing.T) {
+	scoped := mapVCSIntegrationToListItem(&zenfraclient.VCSIntegration{ID: "vcs-1", SpaceID: strPtr("6630f0c2a1b2c3d4e5f60718")})
+	if !scoped.SpaceID.Equal(types.StringValue("6630f0c2a1b2c3d4e5f60718")) {
+		t.Errorf("scoped SpaceID = %v", scoped.SpaceID)
+	}
+	orgWide := mapVCSIntegrationToListItem(&zenfraclient.VCSIntegration{ID: "vcs-2"})
+	if !orgWide.SpaceID.IsNull() {
+		t.Errorf("organization-wide SpaceID = %v, want null", orgWide.SpaceID)
+	}
+}

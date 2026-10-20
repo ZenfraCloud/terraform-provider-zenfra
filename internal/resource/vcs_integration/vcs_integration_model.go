@@ -16,6 +16,7 @@ type VCSIntegrationModel struct {
 	PersonalAccessToken types.String `tfsdk:"personal_access_token"`
 	APIURL              types.String `tfsdk:"api_url"`
 	InstallationID      types.Int64  `tfsdk:"installation_id"`
+	SpaceID             types.String `tfsdk:"space_id"`
 	Status              types.String `tfsdk:"status"`
 	CreatedAt           types.String `tfsdk:"created_at"`
 	UpdatedAt           types.String `tfsdk:"updated_at"`
@@ -44,6 +45,9 @@ func mapVCSIntegrationToState(vcs *zenfraclient.VCSIntegration) VCSIntegrationMo
 	} else {
 		model.APIURL = types.StringNull()
 	}
+
+	// A null space_id is an organization-wide integration.
+	model.SpaceID = types.StringPointerValue(vcs.SpaceID)
 
 	return model
 }

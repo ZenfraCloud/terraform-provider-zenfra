@@ -60,6 +60,10 @@ func (d *vcsIntegrationDataSource) Schema(_ context.Context, _ datasource.Schema
 				MarkdownDescription: "API URL for GitLab integration. Only set for GitLab integrations.",
 				Computed:            true,
 			},
+			"space_id": schema.StringAttribute{
+				MarkdownDescription: "The space the integration is scoped to (usable only by stacks in that space or a descendant space). Null for an organization-wide integration.",
+				Computed:            true,
+			},
 			"created_at": schema.StringAttribute{
 				MarkdownDescription: "Timestamp when the integration was created.",
 				Computed:            true,

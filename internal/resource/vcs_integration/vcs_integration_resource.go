@@ -80,6 +80,12 @@ func (r *VCSIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				Optional:    true,
 				Computed:    true,
 			},
+			"space_id": schema.StringAttribute{
+				Description: "The space the integration is scoped to: only stacks in that space or a descendant space may use it. " +
+					"Omit it for an organization-wide integration; removing it makes the integration organization-wide again. " +
+					"Changed in place.",
+				Optional: true,
+			},
 			"status": schema.StringAttribute{
 				Description: "The current status of the integration.",
 				Computed:    true,
@@ -124,6 +130,7 @@ func (r *VCSIntegrationResource) Create(ctx context.Context, req resource.Create
 	createReq := zenfraclient.CreateVCSIntegrationRequest{
 		Provider:    plan.ProviderType.ValueString(),
 		DisplayName: plan.Name.ValueString(),
+		SpaceID:     plan.SpaceID.ValueStringPointer(),
 	}
 
 	switch plan.ProviderType.ValueString() {
@@ -206,6 +213,15 @@ func (r *VCSIntegrationResource) Update(ctx context.Context, req resource.Update
 	if !plan.Name.Equal(state.Name) {
 		name := plan.Name.ValueString()
 		updateReq.DisplayName = &name
+	}
+	// space_id is sent only when it changed: removed from the configuration
+	// it is null, which makes the integration organization-wide.
+	if !plan.SpaceID.Equal(state.SpaceID) {
+		if plan.SpaceID.IsNull() {
+			updateReq.SpaceID = zenfraclient.NullPatch()
+		} else {
+			updateReq.SpaceID = zenfraclient.StringPatch(plan.SpaceID.ValueString())
+		}
 	}
 
 	vcs, err := r.client.UpdateVCSIntegration(ctx, state.ID.ValueString(), updateReq)
