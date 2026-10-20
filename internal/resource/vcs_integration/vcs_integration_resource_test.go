@@ -34,6 +34,7 @@ func TestMapVCSIntegrationToState(t *testing.T) {
 				ProviderType:   types.StringValue("github"),
 				InstallationID: types.Int64Value(12345),
 				APIURL:         types.StringNull(),
+				SpaceID:        types.StringNull(),
 				Status:         types.StringValue("active"),
 				CreatedAt:      types.StringValue("2026-02-11T10:00:00Z"),
 				UpdatedAt:      types.StringValue("2026-02-11T12:00:00Z"),
@@ -58,6 +59,7 @@ func TestMapVCSIntegrationToState(t *testing.T) {
 				ProviderType:   types.StringValue("gitlab"),
 				InstallationID: types.Int64Null(),
 				APIURL:         types.StringValue("https://gitlab.example.com"),
+				SpaceID:        types.StringNull(),
 				Status:         types.StringValue("active"),
 				CreatedAt:      types.StringValue("2026-02-11T10:00:00Z"),
 				UpdatedAt:      types.StringValue("2026-02-11T12:00:00Z"),
@@ -81,9 +83,36 @@ func TestMapVCSIntegrationToState(t *testing.T) {
 				ProviderType:   types.StringValue("github"),
 				InstallationID: types.Int64Null(),
 				APIURL:         types.StringNull(),
+				SpaceID:        types.StringNull(),
 				Status:         types.StringValue("pending"),
 				CreatedAt:      types.StringValue("2026-02-11T10:00:00Z"),
 				UpdatedAt:      types.StringValue("2026-02-11T10:00:00Z"),
+			},
+		},
+		{
+			name: "integration scoped to a space",
+			input: &zenfraclient.VCSIntegration{
+				ID:             "vcs-321",
+				OrganizationID: "org-123",
+				Provider:       "github",
+				DisplayName:    "Team GitHub",
+				Status:         "active",
+				GitHub:         &zenfraclient.VCSGitHubConfig{InstallationID: 777},
+				SpaceID:        strPtr("6630f0c2a1b2c3d4e5f60718"),
+				CreatedAt:      "2026-10-20T10:00:00Z",
+				UpdatedAt:      "2026-10-20T10:00:00Z",
+			},
+			expected: VCSIntegrationModel{
+				ID:             types.StringValue("vcs-321"),
+				OrganizationID: types.StringValue("org-123"),
+				Name:           types.StringValue("Team GitHub"),
+				ProviderType:   types.StringValue("github"),
+				InstallationID: types.Int64Value(777),
+				APIURL:         types.StringNull(),
+				SpaceID:        types.StringValue("6630f0c2a1b2c3d4e5f60718"),
+				Status:         types.StringValue("active"),
+				CreatedAt:      types.StringValue("2026-10-20T10:00:00Z"),
+				UpdatedAt:      types.StringValue("2026-10-20T10:00:00Z"),
 			},
 		},
 	}
@@ -110,6 +139,9 @@ func TestMapVCSIntegrationToState(t *testing.T) {
 			if !result.APIURL.Equal(tt.expected.APIURL) {
 				t.Errorf("APIURL: got %v, want %v", result.APIURL, tt.expected.APIURL)
 			}
+			if !result.SpaceID.Equal(tt.expected.SpaceID) {
+				t.Errorf("SpaceID: got %v, want %v", result.SpaceID, tt.expected.SpaceID)
+			}
 			if !result.Status.Equal(tt.expected.Status) {
 				t.Errorf("Status: got %v, want %v", result.Status, tt.expected.Status)
 			}
@@ -120,3 +152,5 @@ func TestMapVCSIntegrationToState(t *testing.T) {
 		})
 	}
 }
+
+func strPtr(s string) *string { return &s }

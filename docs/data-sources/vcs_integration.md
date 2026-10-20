@@ -39,5 +39,6 @@ data "zenfra_vcs_integration" "by_id" {
 - `installation_id` (Number) GitHub App installation ID. Only set for GitHub integrations.
 - `organization_id` (String) The organization ID this integration belongs to.
 - `provider_type` (String) The VCS provider type (github or gitlab).
+- `space_id` (String) The space the integration is scoped to (usable only by stacks in that space or a descendant space). Null for an organization-wide integration.
 - `status` (String) The current status of the integration.
 - `updated_at` (String) Timestamp when the integration was last updated.

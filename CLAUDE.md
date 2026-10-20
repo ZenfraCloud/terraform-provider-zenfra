@@ -60,7 +60,7 @@ examples/provider/main.tf         # Example usage
 | `zenfra_bundle_attachment` | Priority-ordered stack↔bundle link |
 | `zenfra_stack_variables` | Replace-all semantics (PUT replaces entire list) |
 | `zenfra_api_token` | Write-once `token` value, role-based, expiration |
-| `zenfra_vcs_integration` | GitHub (installation_id) or GitLab (base_url + token) |
+| `zenfra_vcs_integration` | GitHub (installation_id) or GitLab (base_url + token); optional `space_id` scope changed in place, removing it sends `space_id: null` (organization-wide) |
 | `zenfra_webhook_endpoint` | Write-once `secret` (create response only, null after import); `enabled = true` re-enables an auto-disabled endpoint |
 | `zenfra_team` | `slug` forces replacement; writes need the access-boundary activation (409 `access_boundaries_inactive` before it) |
 | `zenfra_team_membership` | `team_id`, `user_id` force replacement; read through the team's member list; import `team_id/user_id` |

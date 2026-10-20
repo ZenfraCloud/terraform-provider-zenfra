@@ -3,7 +3,10 @@
 
 package zenfraclient
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // --- Space types ---
 
@@ -511,8 +514,11 @@ type VCSIntegration struct {
 	ExternalAccount VCSExternalAccount `json:"external_account"`
 	GitHub          *VCSGitHubConfig   `json:"github,omitempty"`
 	GitLab          *VCSGitLabConfig   `json:"gitlab,omitempty"`
-	CreatedAt       string             `json:"created_at"`
-	UpdatedAt       string             `json:"updated_at"`
+	// SpaceID is the space the integration is scoped to: only stacks in that
+	// space or a descendant may use it. nil (JSON null) is organization-wide.
+	SpaceID   *string `json:"space_id"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
 }
 
 // CreateVCSIntegrationRequest is the request body for creating a VCS integration.
@@ -521,6 +527,8 @@ type CreateVCSIntegrationRequest struct {
 	DisplayName string                  `json:"display_name,omitempty"`
 	GitLab      *CreateVCSGitLabRequest `json:"gitlab,omitempty"`
 	GitHub      *CreateVCSGitHubRequest `json:"github,omitempty"`
+	// SpaceID nil creates an organization-wide integration.
+	SpaceID *string `json:"space_id,omitempty"`
 }
 
 // CreateVCSGitLabRequest contains GitLab-specific configuration.
@@ -538,6 +546,43 @@ type CreateVCSGitHubRequest struct {
 type UpdateVCSIntegrationRequest struct {
 	DisplayName *string `json:"display_name,omitempty"`
 	Status      *string `json:"status,omitempty"`
+	// SpaceID: the zero value leaves the scope unchanged (the key is
+	// omitted), NullPatch() sends null and makes the integration
+	// organization-wide, StringPatch(id) scopes it to that space.
+	SpaceID NullableStringPatch `json:"space_id,omitzero"`
+}
+
+// NullableStringPatch is a PATCH field that can be absent, null or a string.
+// A *string with omitempty cannot send an explicit null: nil is omitted.
+// Use it with the omitzero tag option so the zero value is left out.
+type NullableStringPatch struct {
+	set   bool
+	value *string
+}
+
+// StringPatch returns a patch that sends v.
+func StringPatch(v string) NullableStringPatch {
+	return NullableStringPatch{set: true, value: &v}
+}
+
+// NullPatch returns a patch that sends an explicit JSON null.
+func NullPatch() NullableStringPatch {
+	return NullableStringPatch{set: true}
+}
+
+// IsZero reports whether the patch leaves the field unchanged; omitzero
+// calls it to omit the key.
+func (p NullableStringPatch) IsZero() bool {
+	return !p.set
+}
+
+// MarshalJSON writes null or the string. An unset patch also writes null,
+// so the field must carry omitzero.
+func (p NullableStringPatch) MarshalJSON() ([]byte, error) {
+	if p.value == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(*p.value)
 }
 
 // --- VCS Repository types ---
