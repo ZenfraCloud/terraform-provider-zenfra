@@ -26,6 +26,7 @@ import (
 	resSpace "github.com/zenfra/terraform-provider-zenfra/internal/resource/space"
 	resSpaceGrant "github.com/zenfra/terraform-provider-zenfra/internal/resource/space_grant"
 	resStack "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack"
+	resStackDependency "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack_dependency"
 	resStackVars "github.com/zenfra/terraform-provider-zenfra/internal/resource/stack_variables"
 	resTeam "github.com/zenfra/terraform-provider-zenfra/internal/resource/team"
 	resTeamMembership "github.com/zenfra/terraform-provider-zenfra/internal/resource/team_membership"
@@ -143,6 +144,7 @@ func (p *ZenfraProvider) Resources(_ context.Context) []func() resource.Resource
 		resTeam.NewTeamResource,
 		resTeamMembership.NewTeamMembershipResource,
 		resSpaceGrant.NewSpaceGrantResource,
+		resStackDependency.NewStackDependencyResource,
 	}
 }
 
