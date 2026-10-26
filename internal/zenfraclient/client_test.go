@@ -1180,3 +1180,56 @@ func TestCreateWebhookEndpoint_IsNotRetried(t *testing.T) {
 		t.Fatalf("create sent %d POSTs, want exactly 1", got)
 	}
 }
+
+func TestErrorParsing_CodeFromTheErrorMember(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		body        string
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "error and message: error is the code",
+			body:        `{"error":"dependency_cycle","message":"the dependency would close a cycle"}`,
+			wantCode:    "dependency_cycle",
+			wantMessage: "the dependency would close a cycle",
+		},
+		{
+			name:        "explicit code wins over error",
+			body:        `{"code":"version_conflict","error":"dependency_cycle","message":"bundle version conflict"}`,
+			wantCode:    "version_conflict",
+			wantMessage: "bundle version conflict",
+		},
+		{
+			name:        "error alone stays the message",
+			body:        `{"error":"some prose"}`,
+			wantCode:    "",
+			wantMessage: "some prose",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			_, err := newTestClient(t, server).CreateSpace(context.Background(), CreateSpaceRequest{Name: "n", Slug: "n"})
+			var ce *ConflictError
+			if !errors.As(err, &ce) {
+				t.Fatalf("err = %v, want a ConflictError", err)
+			}
+			if ce.Code != tt.wantCode || ce.Message != tt.wantMessage {
+				t.Errorf("code, message = %q, %q; want %q, %q", ce.Code, ce.Message, tt.wantCode, tt.wantMessage)
+			}
+			if IsAutoAttached(err) {
+				t.Error("IsAutoAttached = true for a non auto_attached body")
+			}
+		})
+	}
+}

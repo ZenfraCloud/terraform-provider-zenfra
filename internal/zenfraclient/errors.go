@@ -12,8 +12,11 @@ import (
 type APIError struct {
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
-	// Code is the machine-readable error code from the body's "code" member
-	// (for example "auto_attached" or "version_conflict"), when present.
+	// Code is the machine-readable error code: the body's "code" member (for
+	// example "auto_attached" or "version_conflict") when present, else its
+	// "error" member when the body also carries a non-empty "message" (for
+	// example "dependency_cycle"). An "error" without "message" is the
+	// message, not a code.
 	Code      string `json:"code,omitempty"`
 	RequestID string `json:"request_id,omitempty"`
 }
