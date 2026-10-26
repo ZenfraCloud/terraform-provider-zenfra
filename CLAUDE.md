@@ -27,6 +27,7 @@ internal/
     api_token/
     bundle/
     bundle_attachment/
+    cloud_integration_attachment/
     space/
     stack/
     stack_variables/
@@ -35,6 +36,7 @@ internal/
     team/
     team_membership/
     space_grant/
+    stack_dependency/
     worker_pool/
   datasource/                     # Data sources (read-only)
     current_organization/
@@ -50,7 +52,7 @@ internal/
 examples/provider/main.tf         # Example usage
 ```
 
-### Resources (13)
+### Resources (14)
 | Resource | Key Notes |
 |----------|-----------|
 | `zenfra_space` | Hierarchical (parent_id), bundle inheritance |
@@ -58,6 +60,7 @@ examples/provider/main.tf         # Example usage
 | `zenfra_worker_pool` | Write-once `api_key` (only on create) |
 | `zenfra_configuration_bundle` | Env vars + mounted files, content versioning with `expected_version` |
 | `zenfra_bundle_attachment` | Priority-ordered stack↔bundle link |
+| `zenfra_cloud_integration_attachment` | Cloud integration↔stack link; every argument forces replacement; composite id and import `integration_id:attachment_id` |
 | `zenfra_stack_variables` | Replace-all semantics (PUT replaces entire list) |
 | `zenfra_api_token` | Write-once `token` value, role-based, expiration |
 | `zenfra_vcs_integration` | GitHub (installation_id) or GitLab (base_url + token); optional `space_id` scope changed in place, removing it sends `space_id: null` (organization-wide) |
@@ -65,6 +68,7 @@ examples/provider/main.tf         # Example usage
 | `zenfra_team` | `slug` forces replacement; writes need the access-boundary activation (409 `access_boundaries_inactive` before it) |
 | `zenfra_team_membership` | `team_id`, `user_id` force replacement; read through the team's member list; import `team_id/user_id` |
 | `zenfra_space_grant` | `space_id`, `team_id` force replacement, `role` (read/write) in place; import `space_id/team_id` |
+| `zenfra_stack_dependency` | `parent_stack_id`, `child_stack_id` force replacement; `enabled` the only in-place change and never `false` on create or replacement (ModifyPlan refuses it); import `child_stack_id/edge_id`; refusal codes (`dependency_cycle`, ...) come from the 409 body's `error` member |
 
 ### Data Sources (6)
 `zenfra_space`, `zenfra_stack`, `zenfra_stacks` (list), `zenfra_worker_pool`, `zenfra_worker_pools` (list), `zenfra_current_organization`

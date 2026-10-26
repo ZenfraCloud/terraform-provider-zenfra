@@ -205,6 +205,11 @@ func checkResponse(resp *http.Response) error {
 	}
 	if json.Unmarshal(bodyBytes, &errBody) == nil {
 		apiErr.Code = errBody.Code
+		// A body carrying both "error" and "message" uses "error" as its
+		// code (stack dependency refusals); "error" alone stays prose.
+		if apiErr.Code == "" && errBody.Message != "" {
+			apiErr.Code = errBody.Error
+		}
 		if errBody.Message != "" {
 			apiErr.Message = errBody.Message
 		} else if errBody.Error != "" {

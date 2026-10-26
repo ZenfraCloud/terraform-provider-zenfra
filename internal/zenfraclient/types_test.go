@@ -1,5 +1,5 @@
 // ABOUTME: Unit tests for the client DTOs that need behaviour of their own.
-// ABOUTME: Covers the stack state-ownership block and the VCS integration space_id patch and response.
+// ABOUTME: Covers the stack state-ownership block, the VCS integration space_id and the stack dependency JSON.
 
 package zenfraclient_test
 
@@ -95,5 +95,50 @@ func TestVCSIntegrationJSON_SpaceID(t *testing.T) {
 	}
 	if scoped.SpaceID == nil || *scoped.SpaceID != "6630f0c2a1b2c3d4e5f60718" {
 		t.Errorf("space_id = %v, want the hex id", scoped.SpaceID)
+	}
+}
+
+// The list shape the handler sends (zenfra-api handler/stack_dependency_test.go):
+// activated_at stays the API's string, a null stack decodes to nil.
+func TestStackDependencyList_DecodesTheHandlerShape(t *testing.T) {
+	body := `{
+		"upstream": [{"id": "e1", "stack": {"id": "p1", "name": "network"}, "enabled": true,
+			"activated_at": "2026-10-25T12:00:00.123Z", "revision": 1,
+			"created_at": "2026-10-25T11:00:00Z", "created_by": "u1", "last_dispatch": null}],
+		"downstream": [{"id": "e2", "stack": null, "enabled": false,
+			"activated_at": "2026-10-25T12:00:00Z", "revision": 2,
+			"created_at": "2026-10-25T11:00:00Z", "created_by": "u1", "last_dispatch": null}]
+	}`
+	var list zenfraclient.StackDependencyList
+	if err := json.Unmarshal([]byte(body), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Upstream) != 1 || len(list.Downstream) != 1 {
+		t.Fatalf("upstream %d, downstream %d; want 1, 1", len(list.Upstream), len(list.Downstream))
+	}
+	up := list.Upstream[0]
+	if up.ID != "e1" || up.Stack == nil || up.Stack.ID != "p1" || up.Stack.Name != "network" ||
+		!up.Enabled || up.ActivatedAt != "2026-10-25T12:00:00.123Z" || up.Revision != 1 || up.CreatedBy != "u1" {
+		t.Errorf("upstream = %+v", up)
+	}
+	down := list.Downstream[0]
+	if down.ID != "e2" || down.Stack != nil || down.Enabled {
+		t.Errorf("downstream = %+v, want a null stack and disabled", down)
+	}
+}
+
+func TestStackDependencyRequests_JSON(t *testing.T) {
+	for req, want := range map[any]string{
+		zenfraclient.CreateStackDependencyRequest{ParentStackID: "p1"}: `{"parent_stack_id":"p1"}`,
+		zenfraclient.SetStackDependencyEnabledRequest{Enabled: false}:  `{"enabled":false}`,
+		zenfraclient.SetStackDependencyEnabledRequest{Enabled: true}:   `{"enabled":true}`,
+	} {
+		got, err := json.Marshal(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Errorf("got %s, want %s", got, want)
+		}
 	}
 }

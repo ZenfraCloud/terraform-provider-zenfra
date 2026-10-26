@@ -795,3 +795,45 @@ type CreateSpaceGrantRequest struct {
 type UpdateSpaceGrantRequest struct {
 	Role string `json:"role"`
 }
+
+// --- Stack dependency types ---
+
+// CreateStackDependencyRequest is the body of POST
+// /api/v1/stacks/:child/dependencies: the parent of a new edge whose child is
+// the path stack.
+type CreateStackDependencyRequest struct {
+	ParentStackID string `json:"parent_stack_id"`
+}
+
+// SetStackDependencyEnabledRequest is the body of PUT
+// /api/v1/stacks/:child/dependencies/:edge/enabled.
+type SetStackDependencyEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// DependencyStackRef is the stack at the other end of an edge.
+type DependencyStackRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// StackDependency is one edge as seen from the path stack. Stack is the other
+// end (the parent, from the child's side), nil when the caller cannot read it.
+// ActivatedAt is kept as the API's string, never reformatted. last_dispatch is
+// not decoded.
+type StackDependency struct {
+	ID          string              `json:"id"`
+	Stack       *DependencyStackRef `json:"stack"`
+	Enabled     bool                `json:"enabled"`
+	ActivatedAt string              `json:"activated_at"`
+	Revision    int64               `json:"revision"`
+	CreatedAt   string              `json:"created_at"`
+	CreatedBy   string              `json:"created_by"`
+}
+
+// StackDependencyList is the body of GET /api/v1/stacks/:id/dependencies:
+// upstream edges have the path stack as their child, downstream as their parent.
+type StackDependencyList struct {
+	Upstream   []StackDependency `json:"upstream"`
+	Downstream []StackDependency `json:"downstream"`
+}
