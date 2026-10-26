@@ -1233,3 +1233,93 @@ func TestErrorParsing_CodeFromTheErrorMember(t *testing.T) {
 		})
 	}
 }
+
+func TestStackDependencies_MethodsPathsAndBodies(t *testing.T) {
+	t.Parallel()
+
+	const edgeJSON = `{"id":"e1","stack":{"id":"p1","name":"network"},"enabled":true,` +
+		`"activated_at":"2026-10-25T12:00:00.123Z","revision":1,"created_at":"2026-10-25T11:00:00Z",` +
+		`"created_by":"u1","last_dispatch":null}`
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		calls = append(calls, r.Method+" "+r.URL.EscapedPath()+" "+string(body))
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodPost:
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(edgeJSON))
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"upstream":[` + edgeJSON + `],"downstream":[]}`))
+		case http.MethodPut:
+			_, _ = w.Write([]byte(edgeJSON))
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server)
+	ctx := context.Background()
+	edge, err := client.CreateStackDependency(ctx, "c/1", "p1")
+	if err != nil || edge.ID != "e1" || edge.Stack.ID != "p1" || edge.ActivatedAt != "2026-10-25T12:00:00.123Z" {
+		t.Fatalf("create = %+v, %v", edge, err)
+	}
+	list, err := client.ListStackDependencies(ctx, "c1")
+	if err != nil || len(list.Upstream) != 1 || list.Upstream[0].ID != "e1" || list.Downstream == nil {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	if _, err := client.SetStackDependencyEnabled(ctx, "c1", "e1", false); err != nil {
+		t.Fatalf("set enabled: %v", err)
+	}
+	if err := client.DeleteStackDependency(ctx, "c1", "e1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	want := []string{
+		`POST /api/v1/stacks/c%2F1/dependencies {"parent_stack_id":"p1"}`,
+		`GET /api/v1/stacks/c1/dependencies `,
+		`PUT /api/v1/stacks/c1/dependencies/e1/enabled {"enabled":false}`,
+		`DELETE /api/v1/stacks/c1/dependencies/e1 `,
+	}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Errorf("calls:\n%s\nwant:\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A replayed create the API had committed would answer dependency_exists
+// with nothing in state, so the POST is sent once.
+func TestCreateStackDependency_IsNotRetried(t *testing.T) {
+	t.Parallel()
+
+	var posts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		posts.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	if _, err := newTestClient(t, server).CreateStackDependency(context.Background(), "c1", "p1"); err == nil {
+		t.Fatal("expected an error")
+	}
+	if got := posts.Load(); got != 1 {
+		t.Fatalf("create sent %d POSTs, want exactly 1", got)
+	}
+}
+
+func TestCreateStackDependency_RefusalCarriesItsCode(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"dependency_cycle","message":"the dependency would close a cycle"}`))
+	}))
+	defer server.Close()
+
+	_, err := newTestClient(t, server).CreateStackDependency(context.Background(), "c1", "p1")
+	var ce *ConflictError
+	if !errors.As(err, &ce) || ce.Code != "dependency_cycle" || ce.Message != "the dependency would close a cycle" {
+		t.Fatalf("err = %v, want a ConflictError with code dependency_cycle", err)
+	}
+}
