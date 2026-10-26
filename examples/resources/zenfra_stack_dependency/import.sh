@@ -1,0 +1,1 @@
+terraform import zenfra_stack_dependency.app_after_network $CHILD_STACK_ID/$DEPENDENCY_ID

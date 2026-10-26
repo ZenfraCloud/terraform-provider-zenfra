@@ -25,6 +25,7 @@ provider "zenfra" {
 - `zenfra_worker_pool` — private worker pool for running operations
 - `zenfra_configuration_bundle` — reusable env vars and mounted files
 - `zenfra_bundle_attachment` — attach a bundle to a stack
+- `zenfra_cloud_integration_attachment` — attach a cloud integration to a stack
 - `zenfra_stack_variables` — environment variables on a stack
 - `zenfra_api_token` — API token management
 - `zenfra_vcs_integration` — GitHub or GitLab integration
@@ -32,6 +33,7 @@ provider "zenfra" {
 - `zenfra_team` — a group of users that space grants are given to (after the access-boundary activation)
 - `zenfra_team_membership` — one user in one team
 - `zenfra_space_grant` — a team's read or write on a space and every space below it
+- `zenfra_stack_dependency` — start a run of one stack after another stack applies
 
 ## Data Sources
 
